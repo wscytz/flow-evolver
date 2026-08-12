@@ -60,7 +60,7 @@ vi.mock("@tauri-apps/plugin-sql", () => ({
 }));
 
 import App from "../App";
-import { getStats } from "../db";
+import { getStats, loadConfig } from "../db";
 
 /*
  * NOTE on coverage strategy:
@@ -108,6 +108,34 @@ describe("App", () => {
     await waitFor(() => {
       expect(root.getAttribute("data-mode")).toBe("expanded");
     });
+  });
+});
+
+describe("loadConfig corruption resilience", () => {
+  beforeEach(() => {
+    // reset to sane defaults first
+    store.set("focus_target_seconds", "1500");
+    store.set("focus_target_min", "600");
+    store.set("focus_target_max", "5400");
+    store.set("rest_ratio_numerator", "5");
+    store.set("rest_ratio_denominator", "25");
+  });
+
+  it("falls back to defaults when a setting is corrupted (NaN)", async () => {
+    store.set("focus_target_seconds", "not-a-number");
+    store.set("rest_ratio_denominator", "abc");
+    const cfg = await loadConfig();
+    expect(cfg.focusTarget).toBe(1500); // fallback, not NaN
+    expect(Number.isNaN(cfg.restRatio)).toBe(false);
+    expect(Number.isFinite(cfg.restRatio)).toBe(true);
+  });
+
+  it("repairs min-above-max bounds", async () => {
+    store.set("focus_target_min", "5400");
+    store.set("focus_target_max", "600");
+    const cfg = await loadConfig();
+    expect(cfg.focusMin).toBe(600);
+    expect(cfg.focusMax).toBe(5400);
   });
 });
 

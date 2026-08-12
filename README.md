@@ -20,9 +20,9 @@ Built as a Tauri v2 desktop app for macOS (Apple Silicon + Intel).
   You keep working. The blob in the background slowly shifts from calm brown
   to agitated blood-orange the longer you overdraw, so you *feel* the load
   without being interrupted.
-- **Four-bucket self-rating.** When you stop, pick Flow / Focused / Okay /
-  Distracted. Each carries a fixed target delta (+10 / +5 / 0 / −5 min),
-  clamped to a sane 10–90 min window. The next session targets the new value.
+- **Four-bucket self-rating (中文界面).** When you stop, pick 心流 (+10m) /
+  专注 (+5m) / 一般 (0) / 分心 (−5m), clamped to a sane 10–90 min window.
+  The next session targets the new value.
 - **Rest, derived.** After a focus session you get a rest proportional to how
   long you actually focused (default 5 min per 25 min). Skippable.
 - **Lightweight task tagging.** Optional one-line label for what you're working
@@ -32,6 +32,27 @@ Built as a Tauri v2 desktop app for macOS (Apple Silicon + Intel).
 - **Small window + expand.** Lives as a 360×480 window you can pin on top; one
   tap expands it. No true OS-fullscreen (that hides the title bar and steals a
   macOS space — too heavy for a focus widget).
+
+## One focus session, end to end
+
+```
+待机 idle ──点开始──▶ 专注 focus ──到点(不打断)──▶ 自动流 autoflow
+  ▲                                                   │
+  │                                                   │ 点"提前结束"
+  │                休息 rest ◀──(评分)─── 评分 rating ◀┘
+  │                  │
+  └──休息结束/跳过────┘
+```
+
+1. **待机** — 显示下一目标(如 25 分钟)、任务输入框、开始按钮、底部统计条。
+2. **专注** — 倒计时,背景 blob 缓慢蠕动,窗口自动展开。
+3. **自动流** — 到点**不响不弹**,静默转正向计时 `+00:01…`,blob 加速变橙。
+4. **评分** — 点"提前结束"后快照本轮实际秒数,弹出四档:心流/专注/一般/分心。
+5. **休息** — 按实际专注时长按比例派生(默认 5 分钟/25 分钟);不足 1 分钟直接跳过。
+6. **回到待机** — 下一目标已被你的自评悄悄调整(±档位,clamp 10–90 分钟)。
+
+Every transition is a pure `useReducer` action; persistence happens in effect
+hooks that watch phase changes, so the state machine stays testable.
 
 ## Honest scope (what this is *not*)
 
@@ -56,6 +77,19 @@ marketing deck. Specifically:
 | **Single window, CSS-adaptive** | One React tree, two layouts. `setSize` toggles small↔expanded. Simpler than two windows, blob transitions stay smooth. |
 | **Neo-brutalism, tuned** | Three colors only (warm off-white, deep brown, blood orange), giant tabular numerals, no rounding/shadows. Adjusted just enough for desktop readability. |
 | **`useReducer` state machine** | `idle → focus → autoflow → rating → rest → idle`. All transitions are pure and unit-tested; persistence lives in effect hooks, not the reducer. |
+
+## Icon
+
+The app icon (macOS `.icns` + Windows `.ico` + all PNG sizes) is generated from
+`src-tauri/icons/source/icon.svg` — a hand-drawn replica of the app's blob in
+the neo-brutalist palette (warm off-white field, blood-orange organic body,
+deep-brown center core). Regenerate with:
+
+```bash
+# 1. render the SVG to a 1024px master (headless Chrome keeps vector precision)
+# 2. sips-resize into the iconset, iconutil → .icns, sips → .ico
+# see src-tauri/icons/source/ for the master and the .html source
+```
 
 ## Getting started
 
@@ -107,12 +141,22 @@ src-tauri/
 
 ## Testing
 
-- **`core.test.ts`** (12 tests) — engine math, the silent auto-flow flip (proven
+- **`core.test.ts`** (15 tests) — engine math, the silent auto-flow flip (proven
   to keep `startedAt` so elapsed keeps growing past target), reducer
-  transitions, heuristic clamping, rest derivation, the four-bucket deltas.
-- **`App.test.tsx`** (2 tests) — the app mounts, loads config from the SQL
-  mock, renders the idle screen, and clicking start dispatches into the
-  running view.
+  transitions + guards (START_FOCUS, RATE, SKIP_RATING), heuristic clamping,
+  rest derivation, the four-bucket deltas.
+- **`App.test.tsx`** (6 tests) — the app mounts, loads config from the SQL
+  mock, clicking start expands the window, getStats streak timezone (UTC+8
+  local-midnight cases), and loadConfig corruption resilience (NaN fallback,
+  min/max repair).
+- **`rating-repro.test.tsx`** (2 tests) — the reported "0m focused 不响应"
+  freeze: start → end early → rating sheet → pick 心流 → app responds; plus
+  double-click on a rating bucket can't cancel a started rest. Includes a
+  static z-index contract check (sheet z-20 > main z-10) — the root cause of
+  the freeze was real mouse clicks hitting main's transparent div.
+- **`Blob.test.tsx`** (2 tests) — morph steps on the fatigue→duration mapping,
+  and a regression that the blob keeps morphing while fatigue drifts each tick
+  (the old `setInterval(dur)` was re-created before its deadline and froze).
 
 Run with `npm test`.
 

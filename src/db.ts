@@ -26,18 +26,32 @@ export async function loadConfig(): Promise<FocusConfig> {
     "SELECT key, value FROM settings",
   )) ?? [];
 
-  const get = (k: string, fallback: number): number => {
+  // Guard against a corrupted/NaN row: Number("garbage") is NaN and would
+  // poison the heuristic target, then get written back as "NaN". Fall back to
+  // the default on anything non-finite or out of a sane range.
+  const safeNumber = (k: string, fallback: number, min: number, max: number): number => {
     const r = rows.find((row) => row.key === k);
-    return r ? Number(r.value) : fallback;
+    if (!r) return fallback;
+    const n = Number(r.value);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, n));
   };
 
-  const focusTarget = get("focus_target_seconds", 1500);
-  const focusMin = get("focus_target_min", 600);
-  const focusMax = get("focus_target_max", 5400);
-  const num = get("rest_ratio_numerator", 5);
-  const den = get("rest_ratio_denominator", 25);
+  const focusTarget = safeNumber("focus_target_seconds", 1500, 60, 86400);
+  let focusMin = safeNumber("focus_target_min", 600, 60, 86400);
+  let focusMax = safeNumber("focus_target_max", 5400, 60, 86400);
+  const num = safeNumber("rest_ratio_numerator", 5, 0, 1000);
+  const den = safeNumber("rest_ratio_denominator", 25, 1, 1000);
 
-  return { focusTarget, focusMin, focusMax, restRatio: den === 0 ? 0.2 : num / den };
+  // A min above max would make every clamp land on min forever — repair the
+  // bounds so the heuristic can actually move the target.
+  if (focusMin > focusMax) {
+    const lo = Math.min(focusMin, focusMax);
+    focusMax = Math.max(focusMin, focusMax);
+    focusMin = lo;
+  }
+
+  return { focusTarget, focusMin, focusMax, restRatio: num / den };
 }
 
 /** Persist the heuristic's newly-computed next focus target. */

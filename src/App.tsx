@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import { EMPTY_TIMER, reducer } from "./timer/reducer";
 import type { FocusConfig, RatingKey, SessionRecord } from "./timer/reducer";
-import { elapsedSeconds, fatigue } from "./timer/engine";
+import { elapsedBetween, elapsedSeconds, fatigue } from "./timer/engine";
 import { nextFocusTarget, restSecondsFor, RATING_DEFS } from "./timer/heuristic";
 import {
   getStats,
@@ -91,7 +91,7 @@ export default function App() {
     const s = stateRef.current;
     if (!s.startedAt) return;
     const end = Date.now();
-    const actual = Math.max(0, Math.floor((end - s.startedAt) / 1000));
+    const actual = elapsedBetween(s.startedAt, end);
     lastFocusRef.current = {
       kind: "focus",
       taskLabel: s.taskLabel,
@@ -201,7 +201,7 @@ export default function App() {
     try {
       if (s.startedAt) {
         const end = Date.now();
-        const actual = Math.max(0, Math.floor((end - s.startedAt) / 1000));
+        const actual = elapsedBetween(s.startedAt, end);
         await insertSession({
           kind: "rest",
           taskLabel: s.taskLabel,

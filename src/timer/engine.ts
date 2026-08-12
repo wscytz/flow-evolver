@@ -37,8 +37,13 @@ export const EMPTY_TIMER: TimerState = {
  * Returns 0 when not running. Capped nowhere — auto-flow is meant to run past.
  */
 export function elapsedSeconds(state: TimerState, now: number): number {
-  if (state.startedAt == null) return 0;
-  return Math.max(0, Math.floor((now - state.startedAt) / 1000));
+  if (state.startedAt === null) return 0;
+  return elapsedBetween(state.startedAt, now);
+}
+
+/** Seconds between two epoch-ms timestamps, floored and clamped at 0. */
+export function elapsedBetween(start: number, end: number): number {
+  return Math.max(0, Math.floor((end - start) / 1000));
 }
 
 /**

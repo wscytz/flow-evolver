@@ -137,6 +137,16 @@ describe("loadConfig corruption resilience", () => {
     expect(cfg.focusMin).toBe(600);
     expect(cfg.focusMax).toBe(5400);
   });
+
+  it("clamps focusTarget into [focusMin, focusMax] (stray stored value)", async () => {
+    // Inside safeNumber's [60, 86400] band but outside the heuristic window —
+    // only reachable via manual edit / an old version, but it must not become
+    // a 2-minute (or 3-hour) session target.
+    store.set("focus_target_seconds", "120");
+    expect((await loadConfig()).focusTarget).toBe(600); // focusMin
+    store.set("focus_target_seconds", "9999");
+    expect((await loadConfig()).focusTarget).toBe(5400); // focusMax
+  });
 });
 
 describe("getStats streak timezone", () => {

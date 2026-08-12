@@ -19,7 +19,9 @@ Built as a Tauri v2 desktop app for macOS (Apple Silicon + Intel).
 - **Auto-flow.** Countdown hits zero → timer silently switches to count-up.
   You keep working. The blob in the background slowly shifts from calm brown
   to agitated blood-orange the longer you overdraw, so you *feel* the load
-  without being interrupted.
+  without being interrupted. During rest the blob stays calm until the rest
+  target elapses, then agitates — a gentle "time to get back to work" cue,
+  not another countdown pressuring you.
 - **Four-bucket self-rating (中文界面).** When you stop, pick 心流 (+10m) /
   专注 (+5m) / 一般 (0) / 分心 (−5m), clamped to a sane 10–90 min window.
   The next session targets the new value.
@@ -145,18 +147,23 @@ src-tauri/
   to keep `startedAt` so elapsed keeps growing past target), reducer
   transitions + guards (START_FOCUS, RATE, SKIP_RATING), heuristic clamping,
   rest derivation, the four-bucket deltas.
-- **`App.test.tsx`** (6 tests) — the app mounts, loads config from the SQL
+- **`App.test.tsx`** (7 tests) — the app mounts, loads config from the SQL
   mock, clicking start expands the window, getStats streak timezone (UTC+8
   local-midnight cases), and loadConfig corruption resilience (NaN fallback,
-  min/max repair).
-- **`rating-repro.test.tsx`** (2 tests) — the reported "0m focused 不响应"
+  min/max repair, stray target clamped into `[min, max]`).
+- **`rating-repro.test.tsx`** (3 tests) — the reported "0m focused 不响应"
   freeze: start → end early → rating sheet → pick 心流 → app responds; plus
-  double-click on a rating bucket can't cancel a started rest. Includes a
-  static z-index contract check (sheet z-20 > main z-10) — the root cause of
-  the freeze was real mouse clicks hitting main's transparent div.
+  double-click on a rating bucket can't cancel a started rest, and the sheet's
+  "专注 X 分钟" label never leaks the previous session's duration into a
+  0-second one. Includes a static z-index contract check (sheet z-20 > main
+  z-10) — the root cause of the freeze was real mouse clicks hitting main's
+  transparent div.
 - **`Blob.test.tsx`** (2 tests) — morph steps on the fatigue→duration mapping,
   and a regression that the blob keeps morphing while fatigue drifts each tick
   (the old `setInterval(dur)` was re-created before its deadline and froze).
+- **`window.test.ts`** (2 tests) — expanded-mode sizing converts the monitor's
+  physical work-area into logical units via the scale factor (a Retina 2x bug
+  that made "expanded" clamp to fullscreen), and small keeps the fixed size.
 
 Run with `npm test`.
 

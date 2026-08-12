@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { formatClock } from "../timer/engine";
 import type { Phase } from "../timer/engine";
 
 /**
@@ -24,10 +25,10 @@ export function Timer({
   // until they tap). Auto-flow, by contrast, is DESIGNED to go negative (count-up).
   const restOver = phase === "rest" && remaining < 0;
   const display = isAuto
-    ? `+${pad(Math.abs(remaining))}`
+    ? `+${formatClock(Math.abs(remaining))}`
     : restOver
       ? "00:00"
-      : pad(remaining);
+      : formatClock(remaining);
   const accent = phase === "rest" ? "var(--color-rest)" : "var(--color-accent)";
 
   return (
@@ -61,16 +62,4 @@ export function Timer({
       </div>
     </button>
   );
-}
-
-function pad(totalSeconds: number): string {
-  // Always compute m/s from the absolute value — floor on a negative number
-  // produces -2 for -63/60 (a double-minus "--2:03"). Callers pass non-negative
-  // values (auto-flow passes abs, rest clamps at 0); this guard keeps the
-  // function correct regardless.
-  const abs = Math.abs(totalSeconds);
-  const m = Math.floor(abs / 60);
-  const s = abs % 60;
-  const sign = totalSeconds < 0 ? "-" : "";
-  return `${sign}${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }

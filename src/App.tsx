@@ -102,7 +102,12 @@ export default function App() {
       taskLabel: s.taskLabel,
       targetSeconds: s.targetSeconds,
       actualSeconds: actual,
-      autoFlowed: s.phase === "autoflow",
+      // autoFlowed must match the flip condition (elapsed >= target), not just
+      // the phase: `now` only advances on the 1s tick, so clicking 提前结束 in
+      // the up-to-1s window after the countdown hit zero would record a
+      // 25:00+ session as not-autoflowed. The reducer rejects the late
+      // REACHED_TARGET, so only this DB flag was wrong.
+      autoFlowed: s.phase === "autoflow" || actual >= s.targetSeconds,
       ratingKey: null,
       ratingDelta: null,
       startedAt: s.startedAt,
@@ -135,11 +140,14 @@ export default function App() {
         ratingDelta: deltaMin,
       };
 
+      // Publish the new target optimistically BEFORE the async persist, so a
+      // fast rate → skip rest → start can't run the next session at the stale
+      // target (configRef updates on render; the DB write is fire-and-forget).
+      setConfig({ ...cfg, focusTarget: nextTarget });
       (async () => {
         try {
           await insertSession(focusRecord);
           await saveFocusTarget(nextTarget);
-          setConfig({ ...cfg, focusTarget: nextTarget });
           setStats(await getStats(Date.now()));
         } catch (e) {
           console.warn("persist failed:", e);
@@ -245,7 +253,12 @@ export default function App() {
   const isRating = state.phase === "rating";
   const isRunning = state.phase === "focus" || state.phase === "autoflow" || state.phase === "rest";
   const remaining = state.targetSeconds - elapsedSeconds(state, now);
-  const fat = fatigue(state, now);
+  // Rest reads differently from focus: the blob stays calm (fatigue 0) while the
+  // rest countdown runs, and agitation only kicks in once the rest is OVER —
+  // the same "you've overrun your target" signal focus/autoflow gives. Rest
+  // should feel relaxing, not like another countdown pressuring you.
+  const fat =
+    state.phase === "rest" ? Math.max(0, fatigue(state, now) - 1) : fatigue(state, now);
 
   return (
     <div

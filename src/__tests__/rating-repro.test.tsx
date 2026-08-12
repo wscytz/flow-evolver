@@ -45,6 +45,7 @@ vi.mock("@tauri-apps/plugin-sql", () => ({
 }));
 
 import App from "../App";
+import { Rating } from "../components/Rating";
 
 /*
  * Focus: the reported "0m focused → unresponsive" freeze. Walk the real path:
@@ -121,5 +122,22 @@ describe("rating interaction (repro '0m focused freeze')", () => {
       expect(screen.queryByText(/这一轮怎么样/i)).not.toBeInTheDocument();
     }, { timeout: 3000 });
     expect(screen.queryByLabelText(/开始专注/i) || screen.queryByText(/跳过休息/i)).toBeTruthy();
+  });
+});
+
+describe("Rating shownSeconds freshness", () => {
+  it("does not leak the previous session's duration into a 0-second session", async () => {
+    // Rating lives for the app's whole lifetime; shownSeconds persists. The old
+    // `if (show && focusActualSeconds > 0)` guard would keep a stale "25 分钟"
+    // when the NEXT session lasted 0s. It must show the fresh 0.
+    const noop = () => {};
+    const { rerender } = render(
+      <Rating show focusActualSeconds={1500} onPick={noop} onSkip={noop} />,
+    );
+    expect(await screen.findByText(/专注 25 分钟/)).toBeInTheDocument();
+
+    rerender(<Rating show focusActualSeconds={0} onPick={noop} onSkip={noop} />);
+    expect(await screen.findByText(/专注 0 分钟/)).toBeInTheDocument();
+    expect(screen.queryByText(/专注 25 分钟/)).not.toBeInTheDocument();
   });
 });

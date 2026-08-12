@@ -21,9 +21,16 @@ async function workArea(): Promise<{ w: number; h: number } | null> {
   try {
     const monitor = await currentMonitor();
     if (!monitor) return null;
+    // Tauri measures Monitor.size/workArea in PHYSICAL pixels, but setSize below
+    // expects LOGICAL units. Without a scaleFactor conversion, a Retina (2x)
+    // display would request ~2x the screen and macOS clamps expanded to
+    // fullscreen instead of ~90% of the work area. Prefer the visible work area
+    // (avoids the menu bar / dock) and fall back to the full monitor size.
+    const physical = monitor.workArea?.size ?? monitor.size;
+    const logical = physical.toLogical(monitor.scaleFactor);
     return {
-      w: Math.max(640, monitor.size.width - 80),
-      h: Math.max(560, monitor.size.height - 120),
+      w: Math.max(640, Math.round(logical.width - 80)),
+      h: Math.max(560, Math.round(logical.height - 120)),
     };
   } catch {
     return null;

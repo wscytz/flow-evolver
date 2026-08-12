@@ -37,7 +37,7 @@ export async function loadConfig(): Promise<FocusConfig> {
     return Math.max(min, Math.min(max, n));
   };
 
-  const focusTarget = safeNumber("focus_target_seconds", 1500, 60, 86400);
+  let focusTarget = safeNumber("focus_target_seconds", 1500, 60, 86400);
   let focusMin = safeNumber("focus_target_min", 600, 60, 86400);
   let focusMax = safeNumber("focus_target_max", 5400, 60, 86400);
   const num = safeNumber("rest_ratio_numerator", 5, 0, 1000);
@@ -50,6 +50,10 @@ export async function loadConfig(): Promise<FocusConfig> {
     focusMax = Math.max(focusMin, focusMax);
     focusMin = lo;
   }
+  // focusTarget passed safeNumber with a [60, 86400] band, but the heuristic
+  // lives in [focusMin, focusMax]. A stray stored value inside the wider band
+  // (manual edit / old version) would otherwise become a 2-minute session.
+  focusTarget = Math.max(focusMin, Math.min(focusMax, focusTarget));
 
   return { focusTarget, focusMin, focusMax, restRatio: num / den };
 }

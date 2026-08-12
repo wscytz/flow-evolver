@@ -24,7 +24,12 @@ export function Rating({
   // lastFocusRef which gets cleared once a rating is chosen).
   const [shownSeconds, setShownSeconds] = useState(0);
   useEffect(() => {
-    if (show && focusActualSeconds > 0) setShownSeconds(focusActualSeconds);
+    // show is false during the exit animation, so this never re-runs mid-exit;
+    // when the sheet opens, focusActualSeconds is always the fresh snapshot
+    // (including 0). The old `> 0` guard STALE-leaked the previous session's
+    // duration: the component lives for the app's whole lifetime, so a
+    // 0-second session after a long one showed "专注 25 分钟".
+    if (show) setShownSeconds(focusActualSeconds);
   }, [show, focusActualSeconds]);
 
   return (

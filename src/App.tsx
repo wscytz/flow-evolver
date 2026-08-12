@@ -184,14 +184,21 @@ export default function App() {
     })();
   }, []);
 
+  const endRestBusy = useRef(false);
   const endRest = useCallback(async () => {
+    // Guard against a rapid double-tap: both clicks would pass the phase check
+    // before the first one dispatches STOP_REST, inserting TWO rest rows. The
+    // busy flag makes the second tap a no-op.
+    if (endRestBusy.current) return;
     const s = stateRef.current;
     if (s.phase !== "rest") return;
-    // log the rest interval
-    if (s.startedAt) {
-      const end = Date.now();
-      const actual = Math.max(0, Math.floor((end - s.startedAt) / 1000));
-      try {
+    // The rest is over the moment the user taps — transition first, persist after.
+    endRestBusy.current = true;
+    dispatch({ type: "STOP_REST" });
+    try {
+      if (s.startedAt) {
+        const end = Date.now();
+        const actual = Math.max(0, Math.floor((end - s.startedAt) / 1000));
         await insertSession({
           kind: "rest",
           taskLabel: s.taskLabel,
@@ -204,11 +211,12 @@ export default function App() {
           endedAt: end,
         });
         setStats(await getStats(end));
-      } catch (e) {
-        console.warn("persist rest failed:", e);
       }
+    } catch (e) {
+      console.warn("persist rest failed:", e);
+    } finally {
+      endRestBusy.current = false;
     }
-    dispatch({ type: "STOP_REST" });
   }, []);
 
   const toggleWinMode = useCallback(() => {
@@ -264,10 +272,10 @@ export default function App() {
           Flow Evolver
         </span>
         <div className="flex gap-1">
-          <IconBtn label="pin" active={onTop} onClick={toggleOnTop}>
+          <IconBtn label="置顶" active={onTop} onClick={toggleOnTop}>
             {onTop ? "◉" : "○"}
           </IconBtn>
-          <IconBtn label="expand" active={winMode === "expanded"} onClick={toggleWinMode}>
+          <IconBtn label="展开" active={winMode === "expanded"} onClick={toggleWinMode}>
             {winMode === "expanded" ? "⋐" : "⋑"}
           </IconBtn>
         </div>
@@ -275,77 +283,82 @@ export default function App() {
 
       {/* ---- main body ---- */}
       <main className="relative z-10 flex flex-1 flex-col">
-        <AnimatePresence mode="wait">
-          {isIdle ? (
-            <motion.div
-              key="idle"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="flex flex-1 flex-col px-6 py-6"
-            >
-              <div className="mb-2 text-xs font-bold uppercase tracking-[0.25em]" style={{ color: "var(--color-ink-soft)" }}>
-                next focus · {Math.round(config.focusTarget / 60)}m
-              </div>
-              <input
-                value={taskInput}
-                onChange={(e) => setTaskInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") startFocus();
-                }}
-                placeholder="What are you working on? (optional)"
-                className="w-full border-b-2 bg-transparent py-3 text-xl font-bold placeholder:font-normal placeholder:text-[var(--color-ink-soft)] focus:outline-none"
-                style={{ borderColor: "var(--color-ink)" }}
-              />
-              <div className="flex flex-1 flex-col items-center justify-center">
-                <button onClick={startFocus} aria-label="start focus" className="block">
-                  <Blob fatigue={0} variant="seed" />
-                </button>
-                <div className="mt-6 text-xs font-bold uppercase tracking-[0.3em]" style={{ color: "var(--color-ink)" }}>
-                  start
+        {isRating ? (
+          // Rating phase: NO running view (timer) behind the sheet — otherwise
+          // the frozen "25:00" bleeds through and overlaps the rating sheet.
+          // This is a plain static div OUTSIDE AnimatePresence: a third
+          // AnimatePresence branch caused two bugs (the timer bleed, and a
+          // stall when switching away from rating → "unresponsive" in WKWebView).
+          // AnimatePresence below only ever sees idle↔run, both with exit.
+          <div className="flex flex-1 flex-col" />
+        ) : (
+          <AnimatePresence mode="wait">
+            {isIdle ? (
+              <motion.div
+                key="idle"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex flex-1 flex-col px-6 py-6"
+              >
+                <div className="mb-2 text-xs font-bold uppercase tracking-[0.25em]" style={{ color: "var(--color-ink-soft)" }}>
+                  下次专注 · {Math.round(config.focusTarget / 60)} 分钟
                 </div>
-              </div>
-            </motion.div>
-          ) : isRating ? (
-            // Rating phase: NO running view (timer) behind the sheet — otherwise the
-            // frozen "25:00" bleeds through and overlaps the rating sheet. The
-            // sheet itself is rendered by <Rating/> below as an absolute overlay.
-            <motion.div key="rating" className="flex flex-1 flex-col" />
-          ) : (
-            <motion.div
-              key="run"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ type: "spring", stiffness: 300, damping: 28 }}
-              className="flex flex-1 flex-col items-center justify-center px-6"
-            >
-              <div className="mb-4 max-w-full truncate text-center text-sm font-semibold" style={{ color: "var(--color-ink-soft)" }}>
-                {state.taskLabel || "focused work"}
-              </div>
-              <Timer
-                remaining={remaining}
-                phase={state.phase}
-                onPrimary={() => {
-                  if (state.phase === "focus" || state.phase === "autoflow") stopFocus();
-                  else if (state.phase === "rest") void endRest();
-                }}
-              />
-              <div className="mt-8 flex gap-3">
-                {state.phase === "rest" && (
-                  <BigBtn onClick={() => void endRest()} variant="ghost">
-                    skip rest
-                  </BigBtn>
-                )}
-                {(state.phase === "focus" || state.phase === "autoflow") && (
-                  <BigBtn onClick={stopFocus} variant="solid">
-                    {state.phase === "autoflow" ? "end & rate" : "end early"}
-                  </BigBtn>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                <input
+                  value={taskInput}
+                  onChange={(e) => setTaskInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") startFocus();
+                  }}
+                  placeholder="正在忙什么？(可选)"
+                  className="w-full border-b-2 bg-transparent py-3 text-xl font-bold placeholder:font-normal placeholder:text-[var(--color-ink-soft)] focus:outline-none"
+                  style={{ borderColor: "var(--color-ink)" }}
+                />
+                <div className="flex flex-1 flex-col items-center justify-center">
+                  <button onClick={startFocus} aria-label="开始专注" className="block">
+                    <Blob fatigue={0} variant="seed" />
+                  </button>
+                  <div className="mt-6 text-xs font-bold uppercase tracking-[0.3em]" style={{ color: "var(--color-ink)" }}>
+                    开始
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              <motion.div
+                key="run"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ type: "spring", stiffness: 300, damping: 28 }}
+                className="flex flex-1 flex-col items-center justify-center px-6"
+              >
+                <div className="mb-4 max-w-full truncate text-center text-sm font-semibold" style={{ color: "var(--color-ink-soft)" }}>
+                  {state.taskLabel || "专注中"}
+                </div>
+                <Timer
+                  remaining={remaining}
+                  phase={state.phase}
+                  onPrimary={() => {
+                    if (state.phase === "focus" || state.phase === "autoflow") stopFocus();
+                    else if (state.phase === "rest") void endRest();
+                  }}
+                />
+                <div className="mt-8 flex gap-3">
+                  {state.phase === "rest" && (
+                    <BigBtn onClick={() => void endRest()} variant="ghost">
+                      跳过休息
+                    </BigBtn>
+                  )}
+                  {(state.phase === "focus" || state.phase === "autoflow") && (
+                    <BigBtn onClick={stopFocus} variant="solid">
+                      {state.phase === "autoflow" ? "结束并评分" : "提前结束"}
+                    </BigBtn>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        )}
       </main>
 
       {/* ---- stats strip (idle only) ---- */}

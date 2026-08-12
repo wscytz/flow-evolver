@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { useEffect, useState } from "react";
 import { RATING_DEFS, RATING_ORDER, formatMinutes } from "../timer/heuristic";
 import type { RatingKey } from "../timer/reducer";
 
@@ -18,6 +19,14 @@ export function Rating({
   onSkip: () => void;
   focusActualSeconds: number;
 }) {
+  // Cache the last real actual-seconds so the "专注 X 分钟" label doesn't flash
+  // back to 0 during the sheet's exit animation (the prop is derived from
+  // lastFocusRef which gets cleared once a rating is chosen).
+  const [shownSeconds, setShownSeconds] = useState(0);
+  useEffect(() => {
+    if (show && focusActualSeconds > 0) setShownSeconds(focusActualSeconds);
+  }, [show, focusActualSeconds]);
+
   return (
     <AnimatePresence>
       {show && (
@@ -26,15 +35,15 @@ export function Rating({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 120, opacity: 0 }}
           transition={{ type: "spring", stiffness: 320, damping: 32 }}
-          className="absolute inset-x-0 bottom-0 border-t-2 bg-[var(--color-bg)] p-4"
+          className="absolute inset-x-0 bottom-0 z-20 border-t-2 bg-[var(--color-bg)] p-4"
           style={{ borderColor: "var(--color-ink)" }}
         >
           <div className="mb-3 flex items-baseline justify-between">
             <h2 className="text-lg font-extrabold uppercase tracking-tight">
-              How was that?
+              这一轮怎么样？
             </h2>
             <span className="tabular text-xs" style={{ color: "var(--color-ink-soft)" }}>
-              {formatMinutes(focusActualSeconds)} focused
+              专注 {formatMinutes(shownSeconds)}
             </span>
           </div>
           <div className="grid grid-cols-2 gap-2">
@@ -92,7 +101,7 @@ export function Rating({
             className="mt-3 w-full py-2 text-xs font-bold uppercase tracking-[0.2em]"
             style={{ color: "var(--color-ink-soft)" }}
           >
-            skip & end
+            跳过并结束
           </button>
         </motion.div>
       )}

@@ -9,9 +9,9 @@ export function Stats({ stats }: { stats: FocusStats | null }) {
       className="grid grid-cols-3 border-t-2"
       style={{ borderColor: "var(--color-ink)" }}
     >
-      <Cell label="today" value={formatMinutes(stats.todayFocusSeconds)} />
-      <Cell label="sessions" value={String(stats.todaySessions)} />
-      <Cell label="streak" value={`${stats.streakDays}d`} />
+      <Cell label="今日" value={formatMinutes(stats.todayFocusSeconds)} />
+      <Cell label="次数" value={String(stats.todaySessions)} />
+      <Cell label="连续" value={`${stats.streakDays}天`} />
     </div>
   );
 }

@@ -43,9 +43,14 @@ export async function loadConfig(): Promise<FocusConfig> {
 /** Persist the heuristic's newly-computed next focus target. */
 export async function saveFocusTarget(seconds: number): Promise<void> {
   const conn = await db();
-  await conn.execute("UPDATE settings SET value = $1 WHERE key = 'focus_target_seconds'", [
-    String(seconds),
-  ]);
+  // UPSERT, not a bare UPDATE: if the row is ever missing (drift, manual edit),
+  // an UPDATE would affect 0 rows and silently diverge from the in-memory value
+  // until restart. INSERT ... ON CONFLICT guarantees the write lands either way.
+  await conn.execute(
+    `INSERT INTO settings(key, value) VALUES ('focus_target_seconds', $1)
+     ON CONFLICT(key) DO UPDATE SET value = $1`,
+    [String(seconds)],
+  );
 }
 
 export async function insertSession(rec: SessionRecord): Promise<void> {

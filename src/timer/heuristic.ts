@@ -16,10 +16,10 @@
 import type { RatingKey, FocusConfig } from "./reducer";
 
 export const RATING_DEFS: Record<RatingKey, { deltaMinutes: number; label: string; blurb: string }> = {
-  flow: { deltaMinutes: 10, label: "Flow", blurb: "Lost track of time. More runway next." },
-  focus: { deltaMinutes: 5, label: "Focused", blurb: "Solid. Nudge the target up." },
-  good: { deltaMinutes: 0, label: "Okay", blurb: "Neutral. Keep it." },
-  distracted: { deltaMinutes: -5, label: "Distracted", blurb: "Shorten the next one." },
+  flow: { deltaMinutes: 10, label: "心流", blurb: "忘了时间。下次给更多时间。" },
+  focus: { deltaMinutes: 5, label: "专注", blurb: "状态不错。目标往上调。" },
+  good: { deltaMinutes: 0, label: "一般", blurb: "保持现状。" },
+  distracted: { deltaMinutes: -5, label: "分心", blurb: "下次缩短目标。" },
 };
 
 export const RATING_ORDER: RatingKey[] = ["flow", "focus", "good", "distracted"];
@@ -42,5 +42,5 @@ export function restSecondsFor(focusActualSeconds: number, cfg: FocusConfig): nu
 
 export function formatMinutes(seconds: number): string {
   const m = Math.round(seconds / 60);
-  return `${m}m`;
+  return `${m} 分钟`;
 }

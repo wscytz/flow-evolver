@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { BLOB_PATHS, morphDuration, blobColor } from "../blob";
 
@@ -51,11 +51,24 @@ export function Blob({
 function HeroBlob({ fatigue, fill }: { fatigue: number; fill: string }) {
   const dur = morphDuration(fatigue); // seconds per morph step, shrinks with fatigue
   const [i, setI] = useState(0);
+  // Last step timestamp, kept in a ref so it survives effect re-runs.
+  const lastStepAt = useRef(0);
 
-  // Controlled cycle: step to the next path every `dur` ms. A shorter dur (deep
-  // auto-flow) means faster, more agitated morphing.
+  // Controlled cycle: a FIXED 1s cadence checks whether `dur` seconds have
+  // elapsed since the last step; when they have, advance the morph. This always
+  // fires — the old `setInterval(..., dur*1000)` re-created on every `dur`
+  // change never reached its deadline while fatigue drifted each tick, so the
+  // blob stayed frozen for the whole countdown (only worked once dur hit the
+  // stable 1.0 floor in autoflow). `dur` only decides how many ticks elapse
+  // between steps, so agitation still accelerates with fatigue.
   useEffect(() => {
-    const id = window.setInterval(() => setI((n) => (n + 1) % BLOB_PATHS.length), dur * 1000);
+    const id = window.setInterval(() => {
+      const now = performance.now();
+      if (now - lastStepAt.current >= dur * 1000) {
+        lastStepAt.current = now;
+        setI((n) => (n + 1) % BLOB_PATHS.length);
+      }
+    }, 1000);
     return () => window.clearInterval(id);
   }, [dur]);
 

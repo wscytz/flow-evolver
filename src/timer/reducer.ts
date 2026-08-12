@@ -52,6 +52,10 @@ export const EMPTY_TIMER: TimerState = { phase: "idle", startedAt: null, targetS
 export function reducer(state: TimerState, action: Action): TimerState {
   switch (action.type) {
     case "START_FOCUS":
+      // Guarded to idle like every other transition: the start UI only exists
+      // in idle, so a stray START_FOCUS from another phase (e.g. a stale tap
+      // during the rating exit) must not reset a running/rest session.
+      if (state.phase !== "idle") return state;
       return {
         phase: "focus",
         startedAt: action.now,

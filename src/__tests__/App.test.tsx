@@ -85,22 +85,22 @@ describe("App", () => {
   it("mounts, loads config from the SQL plugin, and renders the idle screen", async () => {
     render(<App />);
     // idle screen shows the next-focus target (proves async config load worked)
-    expect(await screen.findByText(/next focus/i)).toBeInTheDocument();
+    expect(await screen.findByText(/下次专注/i)).toBeInTheDocument();
     // the seed start button is present
-    expect(screen.getByLabelText(/start focus/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/开始专注/i)).toBeInTheDocument();
     // stats strip renders (loads via getStats)
-    expect(await screen.findByText(/today/i)).toBeInTheDocument();
+    expect(await screen.findByText(/今日/i)).toBeInTheDocument();
   });
 
   it("clicking start switches the window to expanded mode (proof START_FOCUS ran)", async () => {
     const user = userEvent.setup();
     const { container } = render(<App />);
-    await screen.findByText(/next focus/i);
+    await screen.findByText(/下次专注/i);
 
     const root = container.firstChild as HTMLElement;
     expect(root.getAttribute("data-mode")).toBe("small");
 
-    await user.click(screen.getByLabelText(/start focus/i));
+    await user.click(screen.getByLabelText(/开始专注/i));
 
     // data-mode is bound to winMode state, which startFocus() flips.
     // This reliably proves the click handler dispatched without depending on

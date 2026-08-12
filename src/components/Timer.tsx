@@ -55,9 +55,9 @@ export function Timer({
         className="mt-2 text-xs font-bold uppercase tracking-[0.25em]"
         style={{ color: accent }}
       >
-        {phase === "focus" && "focus"}
-        {phase === "autoflow" && "auto-flow · tap to end"}
-        {phase === "rest" && "rest"}
+        {phase === "focus" && "专注中"}
+        {phase === "autoflow" && "自动流 · 点击结束"}
+        {phase === "rest" && "休息"}
       </div>
     </button>
   );

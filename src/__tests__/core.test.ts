@@ -48,6 +48,14 @@ describe("reducer auto-flow", () => {
     expect(remainingSeconds(auto, 70000)).toBe(-10);
   });
 
+  it("START_FOCUS is guarded to idle (can't reset a running/rest session)", () => {
+    const running = reducer(EMPTY_TIMER, { type: "START_FOCUS", now: 0, targetSeconds: 60, taskLabel: "x" });
+    const again = reducer(running, { type: "START_FOCUS", now: 5000, targetSeconds: 999, taskLabel: "y" });
+    expect(again.phase).toBe("focus");
+    expect(again.targetSeconds).toBe(60); // unchanged — not reset
+    expect(again.startedAt).toBe(0);
+  });
+
   it("STOP_FOCUS from autoflow goes to rating", () => {
     const s = { phase: "autoflow" as const, startedAt: 0, targetSeconds: 60, taskLabel: "x" };
     expect(reducer(s, { type: "STOP_FOCUS", now: 70000 }).phase).toBe("rating");

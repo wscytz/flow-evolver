@@ -10,7 +10,7 @@ lasts. When you decide to stop, you rate the session in one tap, and that
 rating nudges the *next* target up or down. Over time the timer tunes itself to
 your own rhythm.
 
-Built as a Tauri v2 desktop app for macOS (Apple Silicon + Intel).
+Built as a Tauri v2 desktop app — macOS (Apple Silicon + Intel) and Windows.
 
 ---
 
@@ -34,6 +34,14 @@ Built as a Tauri v2 desktop app for macOS (Apple Silicon + Intel).
 - **Small window + expand.** Lives as a 360×480 window you can pin on top; one
   tap expands it. No true OS-fullscreen (that hides the title bar and steals a
   macOS space — too heavy for a focus widget).
+
+## Screenshots
+
+![Focus — the blob morphs and shifts to blood-orange the longer you overdraw; the countdown silently flips to count-up.](docs/screenshots/focus.png)
+
+![Idle — set what you're working on, pick a target, hit start.](docs/screenshots/idle.png)
+
+![Rating — four buckets: 心流 / 专注 / 一般 / 分心.](docs/screenshots/rating.png)
 
 ## One focus session, end to end
 
@@ -182,4 +190,5 @@ Defaults live in `src-tauri/src/migrations/002_settings.sql` and persist in the
 
 ## License
 
-MIT.
+GPL v3 — see [LICENSE](LICENSE). Anyone may view, modify and use the code;
+derivative works must be released under the same license.

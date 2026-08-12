@@ -124,7 +124,7 @@ src/
     engine.ts     # pure time math (timestamps, remaining, fatigue, formatting)
     reducer.ts    # the focus session state machine
     heuristic.ts  # four-bucket rating → next-target adjustment + rest derivation
-  blob.ts         # SVG path dictionary, morph duration & color from fatigue
+  blob.ts         # SVG path dictionary, lerpPath interpolation, morph duration & color from fatigue
   db.ts           # SQLite via tauri-plugin-sql (sessions + settings)
   window.ts       # small/expanded window sizing, always-on-top
   components/
@@ -158,9 +158,11 @@ src-tauri/
   0-second one. Includes a static z-index contract check (sheet z-20 > main
   z-10) — the root cause of the freeze was real mouse clicks hitting main's
   transparent div.
-- **`Blob.test.tsx`** (2 tests) — morph steps on the fatigue→duration mapping,
-  and a regression that the blob keeps morphing while fatigue drifts each tick
-  (the old `setInterval(dur)` was re-created before its deadline and froze).
+- **`Blob.test.tsx`** (4 tests) — morph steps on the fatigue→duration mapping,
+  a regression that the blob keeps morphing while fatigue drifts each tick
+  (the old `setInterval(dur)` was re-created before its deadline and froze),
+  and the `lerpPath` liquid-interpolation function (t=0 → from, t=1 → to,
+  skeleton preserved).
 - **`window.test.ts`** (2 tests) — expanded-mode sizing converts the monitor's
   physical work-area into logical units via the scale factor (a Retina 2x bug
   that made "expanded" clamp to fullscreen), and small keeps the fixed size.

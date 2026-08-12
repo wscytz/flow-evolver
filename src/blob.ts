@@ -25,6 +25,27 @@ const PATHS = [
 
 export const BLOB_PATHS: string[] = [...PATHS];
 
+/**
+ * Interpolate between two same-structure SVG paths (same number of numeric
+ * coordinates). `t` 0→1 morphs `from` into `to`: command letters are kept
+ * verbatim and each coordinate is lerped positionally. This is what drives the
+ * liquid morph — Framer's `d` animation was unreliable in the installed
+ * version (keyed remount snapped between shapes; unkeyed didn't animate), so
+ * we interpolate the paths ourselves, which is fully controlled and testable.
+ */
+export function lerpPath(from: string, to: string, t: number): string {
+  const nums = /-?\d+\.?\d*/g;
+  const fromNums = (from.match(nums) ?? []).map(Number);
+  const toNums = (to.match(nums) ?? []).map(Number);
+  let n = 0;
+  return from.replace(nums, () => {
+    const f = fromNums[n];
+    const g = toNums[n] ?? f;
+    n++;
+    return String(Math.round((f + (g - f) * t) * 100) / 100);
+  });
+}
+
 /** Morph cycle duration in seconds for a given fatigue level [0,∞).
  *  fatigue 0 → 4s (calm), fatigue ≥1 → 1s (agitated). Linear between,
  *  1s floor so deep auto-flow accelerates but never looks strobe-broken. */

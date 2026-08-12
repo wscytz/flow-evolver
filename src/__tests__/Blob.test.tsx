@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, act } from "@testing-library/react";
 import { Blob } from "../components/Blob";
+import { lerpPath, BLOB_PATHS } from "../blob";
 
 // jsdom shims (same as App.test setup)
 if (!window.matchMedia) {
@@ -9,8 +10,17 @@ if (!window.matchMedia) {
 }
 
 describe("HeroBlob fatigue→speed", () => {
-  beforeEach(() => vi.useFakeTimers());
-  afterEach(() => vi.useRealTimers());
+  beforeEach(() => {
+    vi.useFakeTimers();
+    // The smooth-morph rAF loop must not fire outside act() under fake timers —
+    // stub it to a no-op; the step cadence (setInterval) drives these tests.
+    vi.stubGlobal("requestAnimationFrame", () => 0);
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
 
   it("morph step interval tracks morphDuration(fatigue)", () => {
     // fatigue=0 → 4s cycle; render with fatigue=0, advance 4s → index should step.
@@ -52,5 +62,22 @@ describe("HeroBlob fatigue→speed", () => {
     }
     const d1 = document.querySelector("svg path")!.getAttribute("d");
     expect(d1).not.toBe(d0); // MUST have stepped — the old code never did
+  });
+});
+
+describe("lerpPath (liquid morph)", () => {
+  it("returns from at t=0 and to at t=1 (positions preserved)", () => {
+    expect(lerpPath(BLOB_PATHS[0], BLOB_PATHS[1], 0)).toBe(BLOB_PATHS[0]);
+    expect(lerpPath(BLOB_PATHS[0], BLOB_PATHS[1], 1)).toBe(BLOB_PATHS[1]);
+  });
+
+  it("interpolates coordinates between the two shapes at t=0.5", () => {
+    const mid = lerpPath(BLOB_PATHS[0], BLOB_PATHS[1], 0.5);
+    expect(mid).not.toBe(BLOB_PATHS[0]);
+    expect(mid).not.toBe(BLOB_PATHS[1]);
+    expect(mid.startsWith("M")).toBe(true);
+    // command skeleton preserved — same number of numeric tokens
+    const nums = (s: string) => (s.match(/-?\d+\.?\d*/g) ?? []).length;
+    expect(nums(mid)).toBe(nums(BLOB_PATHS[0]));
   });
 });

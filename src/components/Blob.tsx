@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { BLOB_PATHS, morphDuration, blobColor } from "../blob";
+import { BLOB_PATHS, lerpPath, morphDuration, blobColor } from "../blob";
 
 /**
  * The hero blob. Renders as an absolutely-positioned full-bleed SVG behind the
@@ -49,31 +49,48 @@ export function Blob({
 }
 
 function HeroBlob({ fatigue, fill }: { fatigue: number; fill: string }) {
-  const dur = morphDuration(fatigue); // seconds per morph step, shrinks with fatigue
+  const dur = morphDuration(fatigue); // seconds per full morph step
   const [i, setI] = useState(0);
+  // t ∈ [0,1] — progress within the current from→to step, advanced every rAF
+  // frame. Kept in React state so the interpolated `d` is fully controlled.
+  const [t, setT] = useState(0);
   // Last step timestamp, kept in a ref so it survives effect re-runs.
-  const lastStepAt = useRef(0);
+  const stepAtRef = useRef(performance.now());
 
-  // Controlled cycle: a FIXED 1s cadence checks whether `dur` seconds have
+  // Step cadence: a FIXED 1s interval checks whether `dur` seconds have
   // elapsed since the last step; when they have, advance the morph. This always
   // fires — the old `setInterval(..., dur*1000)` re-created on every `dur`
   // change never reached its deadline while fatigue drifted each tick, so the
-  // blob stayed frozen for the whole countdown (only worked once dur hit the
-  // stable 1.0 floor in autoflow). `dur` only decides how many ticks elapse
-  // between steps, so agitation still accelerates with fatigue.
+  // blob stayed frozen for the whole countdown. `dur` only decides how many
+  // ticks elapse between steps, so agitation still accelerates with fatigue.
   useEffect(() => {
     const id = window.setInterval(() => {
       const now = performance.now();
-      if (now - lastStepAt.current >= dur * 1000) {
-        lastStepAt.current = now;
+      if (now - stepAtRef.current >= dur * 1000) {
+        stepAtRef.current = now;
         setI((n) => (n + 1) % BLOB_PATHS.length);
+        setT(0);
       }
     }, 1000);
     return () => window.clearInterval(id);
   }, [dur]);
 
-  const from = BLOB_PATHS[i];
-  const to = BLOB_PATHS[(i + 1) % BLOB_PATHS.length];
+  // Liquid morph: interpolate t 0→1 across `dur` every frame. We lerp the two
+  // same-structure paths ourselves instead of animating motion.path's `d` —
+  // Framer's d animation snapped between shapes when keyed on the step index
+  // and didn't animate at all unkeyed in the installed version. Stepping at
+  // t=1 (new from == old to) keeps the shape continuous.
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      setT(Math.min(1, (performance.now() - stepAtRef.current) / (dur * 1000)));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [dur]);
+
+  const d = lerpPath(BLOB_PATHS[i], BLOB_PATHS[(i + 1) % BLOB_PATHS.length], t);
 
   return (
     <svg
@@ -83,16 +100,7 @@ function HeroBlob({ fatigue, fill }: { fatigue: number; fill: string }) {
       style={{ opacity: 0.16 }}
       aria-hidden
     >
-      <motion.path
-        // Key on the step index so each new target starts a fresh tween with the
-        // CURRENT duration — this is what makes the speed react to fatigue.
-        key={i}
-        d={from}
-        fill={fill}
-        initial={false}
-        animate={{ d: to }}
-        transition={{ duration: dur, ease: "easeInOut" }}
-      />
+      <path d={d} fill={fill} />
     </svg>
   );
 }

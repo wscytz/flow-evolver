@@ -227,12 +227,6 @@ export default function App() {
     }
   }, []);
 
-  const toggleWinMode = useCallback(() => {
-    const next: WinMode = winMode === "small" ? "expanded" : "small";
-    setWinMode(next);
-    void setMode(next);
-  }, [winMode]);
-
   const toggleOnTop = useCallback(() => {
     const next = !onTop;
     setOnTop(next);
@@ -287,9 +281,6 @@ export default function App() {
         <div className="flex gap-1">
           <IconBtn label="置顶" active={onTop} onClick={toggleOnTop}>
             {onTop ? "◉" : "○"}
-          </IconBtn>
-          <IconBtn label="展开" active={winMode === "expanded"} onClick={toggleWinMode}>
-            {winMode === "expanded" ? "⋐" : "⋑"}
           </IconBtn>
         </div>
       </header>

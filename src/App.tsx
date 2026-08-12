@@ -210,6 +210,7 @@ export default function App() {
   }
 
   const isIdle = state.phase === "idle";
+  const isRating = state.phase === "rating";
   const isRunning = state.phase === "focus" || state.phase === "autoflow" || state.phase === "rest";
   const remaining = state.targetSeconds - elapsedSeconds(state, now);
   const fat = fatigue(state, now);
@@ -281,6 +282,11 @@ export default function App() {
                 </div>
               </div>
             </motion.div>
+          ) : isRating ? (
+            // Rating phase: NO running view (timer) behind the sheet — otherwise the
+            // frozen "25:00" bleeds through and overlaps the rating sheet. The
+            // sheet itself is rendered by <Rating/> below as an absolute overlay.
+            <motion.div key="rating" className="flex flex-1 flex-col" />
           ) : (
             <motion.div
               key="run"

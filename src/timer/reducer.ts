@@ -71,7 +71,11 @@ export function reducer(state: TimerState, action: Action): TimerState {
       return { ...state, phase: "rating", startedAt: null };
 
     case "RATE":
-      // Rating chosen → drop straight into the derived rest interval.
+      // Guarded to the rating phase (same rationale as SKIP_RATING): a stale
+      // RATE arriving from any other phase shouldn't spawn a rest. The rating
+      // payload's target is computed by the caller's heuristic and persisted in
+      // the effect; the reducer only needs restSeconds + taskLabel.
+      if (state.phase !== "rating") return state;
       return {
         phase: "rest",
         startedAt: action.now,
@@ -80,7 +84,10 @@ export function reducer(state: TimerState, action: Action): TimerState {
       };
 
     case "SKIP_RATING":
-      // User declined to rate — just go idle. No rest forced.
+      // Only valid from the rating phase. Guarded so a stale SKIP_RATING (e.g.
+      // a double-click landing after RATE already started a rest) can't cancel
+      // the rest the user just earned.
+      if (state.phase !== "rating") return state;
       return { ...EMPTY_TIMER };
 
     case "SKIP_REST":

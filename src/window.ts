@@ -31,15 +31,21 @@ async function workArea(): Promise<{ w: number; h: number } | null> {
 }
 
 export async function setMode(mode: WinMode): Promise<void> {
-  const win = getCurrentWindow();
-  if (mode === "small") {
-    await win.setSize(new LogicalSize(SMALL.width, SMALL.height));
-  } else {
-    const area = await workArea();
-    if (area) {
-      await win.setSize(new LogicalSize(area.w, area.h));
-      await win.center();
+  try {
+    const win = getCurrentWindow();
+    if (mode === "small") {
+      await win.setSize(new LogicalSize(SMALL.width, SMALL.height));
+    } else {
+      const area = await workArea();
+      if (area) {
+        await win.setSize(new LogicalSize(area.w, area.h));
+        await win.center();
+      }
     }
+  } catch {
+    // Non-fatal: without a Tauri runtime (e.g. pure-web dev) the window APIs
+    // don't exist. Callers fire-and-forget this; swallow so the optimistic
+    // winMode state change in App still drives the layout.
   }
 }
 

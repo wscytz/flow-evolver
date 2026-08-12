@@ -114,6 +114,11 @@ export default function App() {
 
   const rate = useCallback(
     (r: RatingKey) => {
+      // Guard: only valid from the rating phase. A double-click (or a pick
+      // landing during the sheet's exit animation) would otherwise reach here
+      // with lastFocusRef already nulled and silently drop the rest we just
+      // earned — SKIP_RATING from 'rest' would cancel it.
+      if (stateRef.current.phase !== "rating") return;
       const cfg = configRef.current;
       const focus = lastFocusRef.current;
       if (!cfg || !focus) {
@@ -159,6 +164,25 @@ export default function App() {
     },
     [],
   );
+
+  const skipRating = useCallback(() => {
+    // Same guard as rate(): only valid while the rating sheet is up.
+    if (stateRef.current.phase !== "rating") return;
+    const focus = lastFocusRef.current;
+    lastFocusRef.current = null;
+    dispatch({ type: "SKIP_RATING", now: Date.now() });
+    if (!focus) return;
+    // "skip & end" still counts the focus session (ratingKey null) — otherwise
+    // an unrated long flow would silently vanish from today's stats/streak.
+    (async () => {
+      try {
+        await insertSession({ ...focus, ratingKey: null, ratingDelta: null });
+        setStats(await getStats(Date.now()));
+      } catch (e) {
+        console.warn("persist skip failed:", e);
+      }
+    })();
+  }, []);
 
   const endRest = useCallback(async () => {
     const s = stateRef.current;
@@ -331,7 +355,7 @@ export default function App() {
       <Rating
         show={state.phase === "rating"}
         onPick={rate}
-        onSkip={() => dispatch({ type: "SKIP_RATING", now: Date.now() })}
+        onSkip={skipRating}
         focusActualSeconds={lastFocusRef.current?.actualSeconds ?? 0}
       />
     </div>

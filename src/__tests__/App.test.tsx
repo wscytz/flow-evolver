@@ -27,6 +27,8 @@ const store = new Map<string, string>([
   ["rest_ratio_denominator", "25"],
 ]);
 const sessions: Record<string, unknown>[] = [];
+// Optional: seed the streak query with raw ended_at timestamps.
+let streakEndedAt: number[] = [];
 
 vi.mock("@tauri-apps/plugin-sql", () => ({
   default: class FakeDB {
@@ -38,7 +40,9 @@ vi.mock("@tauri-apps/plugin-sql", () => ({
       if (/FROM settings/.test(compact)) {
         return Array.from(store.entries()).map(([key, value]) => ({ key, value })) as unknown as T;
       }
-      if (/DISTINCT/.test(compact)) return [] as unknown as T;
+      if (/ended_at AS e/.test(compact)) {
+        return streakEndedAt.map((e) => ({ e })) as unknown as T;
+      }
       if (/SUM/.test(compact)) return [{ total: 0, n: 0 }] as unknown as T;
       return [] as unknown as T;
     }
@@ -56,14 +60,15 @@ vi.mock("@tauri-apps/plugin-sql", () => ({
 }));
 
 import App from "../App";
+import { getStats } from "../db";
 
 /*
  * NOTE on coverage strategy:
  * The deep state-machine behavior (auto-flow silent flip, heuristic clamping,
  * rating → next-target → rest derivation, persistence record shape) is proven
- * exhaustively in core.test.ts and session.sim.ts against the REAL reducer and
- * heuristic code, with zero jsdom/Framer flakiness. Those are the load-bearing
- * tests.
+ * exhaustively in core.test.ts against the REAL reducer and heuristic code,
+ * with zero jsdom/Framer flakiness. Those are the load-bearing tests. The
+ * getStats timezone/streak behavior is covered in its own describe() below.
  *
  * Here we assert only what jsdom can reliably observe about the component tree:
  * the app mounts, loads config from the SQL mock, and renders the idle screen
@@ -105,3 +110,47 @@ describe("App", () => {
     });
   });
 });
+
+describe("getStats streak timezone", () => {
+  const savedTZ = process.env.TZ;
+
+  afterEach(() => {
+    if (savedTZ === undefined) delete process.env.TZ;
+    else process.env.TZ = savedTZ;
+    streakEndedAt = [];
+    sessions.length = 0;
+  });
+
+  it("does not merge a local just-past-midnight session into the previous UTC day", async () => {
+    // UTC+8, no DST → deterministic regardless of host machine's tz.
+    process.env.TZ = "Asia/Shanghai";
+    // "Now": local 2026-08-12 01:00 (+08). In UTC that is 2026-08-11 17:00,
+    // so a UTC day-index would claim "today" is the 11th.
+    const now = Date.parse("2026-08-12T01:00:00+08:00");
+    // Two consecutive LOCAL calendar days:
+    //   A = local 08-11 23:50  (UTC 08-11 15:50 → old code buckets: 11th)
+    //   B = local 08-12 00:30  (UTC 08-11 16:30 → old code ALSO buckets: 11th!)
+    // Old behavior: both land on UTC day 11 → streak 1 (the 12th is invisible).
+    // Correct behavior: A is 08-11, B is 08-12 → streak 2.
+    const sessionA = Date.parse("2026-08-11T23:50:00+08:00");
+    const sessionB = Date.parse("2026-08-12T00:30:00+08:00");
+    streakEndedAt = [sessionA, sessionB];
+
+    const stats = await getStats(now);
+    expect(stats.streakDays).toBe(2);
+  });
+
+  it("counts an early-morning session as the local day, so a 3-day run across a local-midnight boundary stays 3", async () => {
+    process.env.TZ = "Asia/Shanghai";
+    const now = Date.parse("2026-08-12T09:00:00+08:00"); // UTC 08-12 01:00
+    // 08-10 evening, 08-11 evening, 08-12 early-morning → 3 consecutive local days.
+    streakEndedAt = [
+      Date.parse("2026-08-10T23:00:00+08:00"), // UTC 08-10 15:00
+      Date.parse("2026-08-11T23:00:00+08:00"), // UTC 08-11 15:00
+      Date.parse("2026-08-12T01:00:00+08:00"), // UTC 08-11 17:00 ← would fold into 11th
+    ];
+    const stats = await getStats(now);
+    expect(stats.streakDays).toBe(3);
+  });
+});
+

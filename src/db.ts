@@ -92,12 +92,20 @@ export interface FocusStats {
 export async function getStats(now: number): Promise<FocusStats> {
   const conn = await db();
 
-  const utcStartOfDay = (t: number) => {
+  // "Today" and the streak MUST use the same local-day index. Using UTC day
+  // indices (ended_at / 86400000) while "today" uses local midnight drifts
+  // apart: in UTC+8 a session ending after 20:00 local is already UTC+1 day,
+  // so the streak would count it as "tomorrow" and break an otherwise-unbroken
+  // run. Fix: shift ended_at by the local timezone offset (minutes) so both
+  // boundaries agree on the user's calendar day.
+  const tzOffsetMinutes = new Date(now).getTimezoneOffset();
+
+  const localStartOfDay = (t: number) => {
     const d = new Date(t);
     d.setHours(0, 0, 0, 0);
     return d.getTime();
   };
-  const startOfToday = utcStartOfDay(now);
+  const startOfToday = localStartOfDay(now);
 
   const today = (await conn.select<{ total: number; n: number }[]>(
     `SELECT COALESCE(SUM(actual_seconds),0) AS total, COUNT(*) AS n
@@ -109,16 +117,23 @@ export async function getStats(now: number): Promise<FocusStats> {
     `SELECT COALESCE(SUM(actual_seconds),0) AS total FROM sessions WHERE kind='focus'`,
   )) ?? [];
 
-  // streak: count consecutive days (ending today or yesterday) with >=1 focus session.
-  const days = (await conn.select<{ d: number }[]>(
-    `SELECT DISTINCT (ended_at / 86400000) AS d FROM sessions WHERE kind='focus' ORDER BY d DESC LIMIT 400`,
+  // streak: count consecutive local calendar days (ending today or yesterday)
+  // with >=1 focus session. Day index computed in JS as
+  //   localDayIndex(ms) = Math.floor((ms - tzOffset)/86400000)
+  // which matches the localStartOfDay boundary used for "today" above.
+  // We pull raw ended_at timestamps and derive indices here — doing the shift
+  // in SQL is a foot-gun (SQLite INTEGER division truncates, and DISTINCT over
+  // a float index wouldn't match the JS floor). The volume is small.
+  const ended = (await conn.select<{ e: number }[]>(
+    `SELECT ended_at AS e FROM sessions WHERE kind='focus'`,
   )) ?? [];
 
-  const todayIdx = Math.floor(now / 86400000);
+  const localDay = (ms: number) => Math.floor((ms - tzOffsetMinutes * 60 * 1000) / 86400000);
+  const todayIdx = localDay(now);
+  const daySet = new Set(ended.map((r) => localDay(r.e)));
   let streak = 0;
   let cursor = todayIdx;
   // allow streak to count if there's a session today OR yesterday as the seed
-  const daySet = new Set(days.map((r) => r.d));
   if (!daySet.has(cursor)) cursor -= 1; // grace: if nothing today, keep streak from yesterday
   while (daySet.has(cursor)) {
     streak += 1;

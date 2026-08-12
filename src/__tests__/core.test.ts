@@ -74,6 +74,28 @@ describe("reducer auto-flow", () => {
     expect(reducer(s, { type: "SKIP_REST" }).phase).toBe("idle");
     expect(reducer(s, { type: "STOP_REST" }).phase).toBe("idle");
   });
+
+  it("SKIP_RATING is guarded to the rating phase (can't cancel a started rest)", () => {
+    // The double-click case: RATE already moved us into rest, then a stale
+    // SKIP_RATING arrives (second click during the sheet's exit). It must NOT
+    // drop us back to idle and cancel the rest.
+    const rest = { phase: "rest" as const, startedAt: 1000, targetSeconds: 300, taskLabel: "" };
+    const after = reducer(rest, { type: "SKIP_RATING", now: 1100 });
+    expect(after.phase).toBe("rest");
+    expect(after.startedAt).toBe(1000); // rest preserved
+    // And it still works from the rating phase itself.
+    const rating = { phase: "rating" as const, startedAt: null, targetSeconds: 0, taskLabel: "" };
+    expect(reducer(rating, { type: "SKIP_RATING", now: 1100 }).phase).toBe("idle");
+  });
+
+  it("RATE is guarded to the rating phase", () => {
+    const s = { phase: "idle" as const, startedAt: null, targetSeconds: 0, taskLabel: "" };
+    const r = reducer(s, {
+      type: "RATE", now: 100, rating: "flow", deltaMinutes: 10,
+      nextFocusTarget: 2100, restSeconds: 300, taskLabel: "x",
+    });
+    expect(r.phase).toBe("idle"); // no-op outside rating
+  });
 });
 
 describe("heuristic", () => {

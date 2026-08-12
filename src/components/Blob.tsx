@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { BLOB_PATHS, morphDuration, blobColor } from "../blob";
 
@@ -15,6 +16,13 @@ import { BLOB_PATHS, morphDuration, blobColor } from "../blob";
  * (div↔div, path↔path); cross-type (div↔path) sharing produces broken layout
  * math and can swallow the viewport. The seed and hero are different element
  * types, so we animate them independently with a simple enter/exit fade.
+ *
+ * Speed control: we DRIVE the morph from a timer instead of letting Framer
+ * auto-cycle. Passing the stable BLOB_PATHS array to `animate={{ d: ... }}`
+ * means Framer never sees a value change and won't restart the cycle, so
+ * `transition.duration` updates are ignored (only `fill` moved). A controlled
+ * index flip gives a fresh `d` string each step, so the duration — and thus
+ * the fatigue-driven agitation — actually applies.
  */
 export function Blob({
   fatigue,
@@ -37,11 +45,23 @@ export function Blob({
     );
   }
 
-  // hero: full-bleed morphing blob. motion.path cycles through BLOB_PATHS.
-  // Opacity lives on the <svg> wrapper, not on motion.path — putting it on the
-  // animated path conflicts with Framer's value pipeline and renders the fill
-  // fully opaque (verified: turned the whole focus view solid dark).
-  const dur = morphDuration(fatigue);
+  return <HeroBlob fatigue={fatigue} fill={fill} />;
+}
+
+function HeroBlob({ fatigue, fill }: { fatigue: number; fill: string }) {
+  const dur = morphDuration(fatigue); // seconds per morph step, shrinks with fatigue
+  const [i, setI] = useState(0);
+
+  // Controlled cycle: step to the next path every `dur` ms. A shorter dur (deep
+  // auto-flow) means faster, more agitated morphing.
+  useEffect(() => {
+    const id = window.setInterval(() => setI((n) => (n + 1) % BLOB_PATHS.length), dur * 1000);
+    return () => window.clearInterval(id);
+  }, [dur]);
+
+  const from = BLOB_PATHS[i];
+  const to = BLOB_PATHS[(i + 1) % BLOB_PATHS.length];
+
   return (
     <svg
       viewBox="0 0 200 200"
@@ -51,15 +71,14 @@ export function Blob({
       aria-hidden
     >
       <motion.path
-        d={BLOB_PATHS[0]}
+        // Key on the step index so each new target starts a fresh tween with the
+        // CURRENT duration — this is what makes the speed react to fatigue.
+        key={i}
+        d={from}
         fill={fill}
-        animate={{ d: BLOB_PATHS }}
-        transition={{
-          duration: dur,
-          repeat: Infinity,
-          repeatType: "mirror",
-          ease: "easeInOut",
-        }}
+        initial={false}
+        animate={{ d: to }}
+        transition={{ duration: dur, ease: "easeInOut" }}
       />
     </svg>
   );

@@ -19,9 +19,15 @@ export function Timer({
   onPrimary: () => void;
 }) {
   const isAuto = phase === "autoflow";
+  // Rest never shows negative garbage: once the rest target elapses we clamp the
+  // display at 00:00 (the user is free to keep resting; the phase stays 'rest'
+  // until they tap). Auto-flow, by contrast, is DESIGNED to go negative (count-up).
+  const restOver = phase === "rest" && remaining < 0;
   const display = isAuto
     ? `+${pad(Math.abs(remaining))}`
-    : pad(remaining);
+    : restOver
+      ? "00:00"
+      : pad(remaining);
   const accent = phase === "rest" ? "var(--color-rest)" : "var(--color-accent)";
 
   return (
@@ -58,9 +64,13 @@ export function Timer({
 }
 
 function pad(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60);
-  const s = Math.abs(totalSeconds) % 60;
-  // show as m:ss; for negative countdown (shouldn't happen in non-auto), guard
+  // Always compute m/s from the absolute value — floor on a negative number
+  // produces -2 for -63/60 (a double-minus "--2:03"). Callers pass non-negative
+  // values (auto-flow passes abs, rest clamps at 0); this guard keeps the
+  // function correct regardless.
+  const abs = Math.abs(totalSeconds);
+  const m = Math.floor(abs / 60);
+  const s = abs % 60;
   const sign = totalSeconds < 0 ? "-" : "";
   return `${sign}${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }

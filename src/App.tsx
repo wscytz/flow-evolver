@@ -12,7 +12,7 @@ import {
   saveFocusTarget,
   type FocusStats,
 } from "./db";
-import { setMode, toggleAlwaysOnTop, type WinMode } from "./window";
+import { toggleAlwaysOnTop } from "./window";
 
 import { Blob } from "./components/Blob";
 import { Timer } from "./components/Timer";
@@ -25,7 +25,6 @@ export default function App() {
   const [now, setNow] = useState<number>(() => Date.now());
   const [taskInput, setTaskInput] = useState("");
   const [stats, setStats] = useState<FocusStats | null>(null);
-  const [winMode, setWinMode] = useState<WinMode>("small");
   const [onTop, setOnTop] = useState(false);
   const [ready, setReady] = useState(false);
 
@@ -85,11 +84,7 @@ export default function App() {
       taskLabel: label,
     });
     setNow(t);
-    if (winMode !== "expanded") {
-      setWinMode("expanded");
-      void setMode("expanded");
-    }
-  }, [taskInput, winMode]);
+  }, [taskInput]);
 
   const stopFocus = useCallback(() => {
     // snapshot the focus interval that just ended, to use when rating is chosen
@@ -258,7 +253,6 @@ export default function App() {
     <div
       className="relative flex h-full flex-col overflow-hidden"
       style={{ background: "var(--color-bg)" }}
-      data-mode={winMode}
     >
       {/* ---- blob background (only during running phases) ---- */}
       {isRunning && (

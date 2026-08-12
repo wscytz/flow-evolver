@@ -37,6 +37,11 @@ async function workArea(): Promise<{ w: number; h: number } | null> {
   }
 }
 
+/**
+ * Reserved for a future "auto-expand on focus" setting — not wired into the UI
+ * right now (the window stays small; users resize with system controls). Kept
+ * implemented and tested so the feature is one toggle away.
+ */
 export async function setMode(mode: WinMode): Promise<void> {
   try {
     const win = getCurrentWindow();

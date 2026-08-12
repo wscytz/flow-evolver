@@ -34,9 +34,9 @@ Built as a Tauri v2 desktop app — macOS (Apple Silicon + Intel) and Windows.
 - **Stats.** Today's focus time, session count, and a day streak, stored
   locally in SQLite.
 - **Small window, pin-on-top.** Lives as a 360×480 window you can pin on top
-  (置顶 button in the header). It auto-expands while you focus; resize with the
-  system window controls. No true OS-fullscreen (that hides the title bar and
-  steals a macOS space — too heavy for a focus widget).
+  (置顶 button in the header). Resize with the system window controls. No true
+  OS-fullscreen (that hides the title bar and steals a macOS space — too heavy
+  for a focus widget).
 
 ## Screenshots
 
@@ -87,7 +87,7 @@ marketing deck. Specifically:
 |---|---|
 | **Tauri** (not Electron/web) | Small native binary, real always-on-top window, local SQLite. A focus tool that lives on the desktop. |
 | **Timestamp-based timer** | Elapsed is derived from `Date.now() - startedAt`, not `setInterval` accumulation. Survives window suspension / system sleep; the auto-flow count-up is just `remaining < 0`. |
-| **Single window, CSS-adaptive** | One React tree, two layouts. `setSize` auto-expands on focus; the system window controls resize. Simpler than two windows, blob transitions stay smooth. |
+| **Single window, CSS-adaptive** | One React tree, two layouts; the system window controls resize. Simpler than two windows, blob transitions stay smooth. |
 | **Neo-brutalism, tuned** | Three colors only (warm off-white, deep brown, blood orange), giant tabular numerals, no rounding/shadows. Adjusted just enough for desktop readability. |
 | **`useReducer` state machine** | `idle → focus → autoflow → rating → rest → idle`. All transitions are pure and unit-tested; persistence lives in effect hooks, not the reducer. |
 

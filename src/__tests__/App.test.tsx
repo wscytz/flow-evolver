@@ -92,21 +92,17 @@ describe("App", () => {
     expect(await screen.findByText(/今日/i)).toBeInTheDocument();
   });
 
-  it("clicking start switches the window to expanded mode (proof START_FOCUS ran)", async () => {
+  it("clicking start runs START_FOCUS (focus screen appears)", async () => {
     const user = userEvent.setup();
-    const { container } = render(<App />);
+    render(<App />);
     await screen.findByText(/下次专注/i);
-
-    const root = container.firstChild as HTMLElement;
-    expect(root.getAttribute("data-mode")).toBe("small");
 
     await user.click(screen.getByLabelText(/开始专注/i));
 
-    // data-mode is bound to winMode state, which startFocus() flips.
-    // This reliably proves the click handler dispatched without depending on
-    // Framer's exit animation settling.
+    // The focus screen's 提前结束 button proves START_FOCUS dispatched —
+    // without relying on Framer's exit animation settling.
     await waitFor(() => {
-      expect(root.getAttribute("data-mode")).toBe("expanded");
+      expect(screen.getByText(/提前结束/i)).toBeInTheDocument();
     });
   });
 });

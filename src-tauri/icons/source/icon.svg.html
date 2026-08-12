@@ -5,14 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Neuro-Adaptive Icon - PERFECT REPLICA</title>
     <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #222;
-            margin: 0;
-        }
+        /* 满画布渲染:SVG 铺满 1024×1024,blob 在 viewBox 里本就居中。
+           之前用 flex 居中 + SVG width=512,导致只渲染了画布左上 1/4。
+           这里 margin:0 + width:1024,截图 window-size=1024 即得到满幅 master。 */
+        body { margin: 0; background: transparent; }
+        svg { display: block; width: 1024px; height: 1024px; }
     </style>
 </head>
 <body>

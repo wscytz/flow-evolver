@@ -1,5 +1,7 @@
 # Flow Evolver
 
+**English** | [简体中文](README.zh-CN.md)
+
 An adaptive focus timer that **refuses to interrupt you when you're in the zone.**
 
 The classic pomodoro countdown has one fatal flaw: when you finally hit a flow

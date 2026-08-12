@@ -45,7 +45,7 @@ export default function App() {
       } catch (e) {
         // DB unavailable (e.g. running outside Tauri during pure-web dev) —
         // fall back to defaults so the UI still works.
-        console.warn("DB load failed, using defaults:", e);
+        console.warn("数据库加载失败,使用默认配置:", e);
         setConfig({ focusTarget: 1500, focusMin: 600, focusMax: 5400, restRatio: 0.2 });
       } finally {
         setReady(true);
@@ -145,7 +145,7 @@ export default function App() {
           await saveFocusTarget(nextTarget);
           setStats(await getStats(Date.now()));
         } catch (e) {
-          console.warn("persist failed:", e);
+          console.warn("保存失败:", e);
         }
       })();
 
@@ -182,7 +182,7 @@ export default function App() {
         await insertSession({ ...focus, ratingKey: null, ratingDelta: null });
         setStats(await getStats(Date.now()));
       } catch (e) {
-        console.warn("persist skip failed:", e);
+        console.warn("保存失败(跳过评分):", e);
       }
     })();
   }, []);
@@ -216,7 +216,7 @@ export default function App() {
         setStats(await getStats(end));
       }
     } catch (e) {
-      console.warn("persist rest failed:", e);
+      console.warn("保存失败(休息):", e);
     } finally {
       endRestBusy.current = false;
     }
@@ -309,6 +309,7 @@ export default function App() {
                     if (e.key === "Enter") startFocus();
                   }}
                   placeholder="正在忙什么？(可选)"
+                  aria-label="任务描述"
                   className="w-full border-b-2 bg-transparent py-3 text-xl font-bold placeholder:font-normal placeholder:text-[var(--color-ink-soft)] focus:outline-none"
                   style={{ borderColor: "var(--color-ink)" }}
                 />

@@ -56,6 +56,15 @@ export function Rating({
               const def = RATING_DEFS[key];
               const positive = def.deltaMinutes > 0;
               const negative = def.deltaMinutes < 0;
+              // No nested ternary (review rule). Bucket colors: flow is white on
+              // accent; distracted gets the soft-accent bg; the +/- delta glyphs
+              // share the accent; neutral uses the soft ink.
+              let bgColor = "transparent";
+              if (key === "flow") bgColor = "var(--color-accent)";
+              else if (key === "distracted") bgColor = "var(--color-accent-soft)";
+              let deltaColor = "var(--color-ink-soft)";
+              if (key === "flow") deltaColor = "#fff";
+              else if (positive || negative) deltaColor = "var(--color-accent)";
               return (
                 <button
                   key={key}
@@ -63,12 +72,7 @@ export function Rating({
                   className="border-2 p-3 text-left transition-transform active:translate-y-0.5"
                   style={{
                     borderColor: "var(--color-ink)",
-                    background:
-                      key === "flow"
-                        ? "var(--color-accent)"
-                        : key === "distracted"
-                          ? "var(--color-accent-soft)"
-                          : "transparent",
+                    background: bgColor,
                     color: key === "flow" ? "#fff" : "var(--color-ink)",
                   }}
                 >
@@ -76,16 +80,7 @@ export function Rating({
                     <span className="text-base font-extrabold">{def.label}</span>
                     <span
                       className="tabular text-sm font-bold"
-                      style={{
-                        color:
-                          key === "flow"
-                            ? "#fff"
-                            : positive
-                              ? "var(--color-accent)"
-                              : negative
-                                ? "var(--color-accent)"
-                                : "var(--color-ink-soft)",
-                      }}
+                      style={{ color: deltaColor }}
                     >
                       {def.deltaMinutes > 0 ? "+" : ""}
                       {def.deltaMinutes}

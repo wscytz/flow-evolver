@@ -44,8 +44,7 @@ export type Action =
   | { type: "RATE"; now: number; rating: RatingKey; deltaMinutes: number; nextFocusTarget: number; restSeconds: number; taskLabel: string }
   | { type: "SKIP_RATING"; now: number }
   | { type: "SKIP_REST" }
-  | { type: "STOP_REST" }
-  | { type: "RESET" };
+  | { type: "STOP_REST" };
 
 export const EMPTY_TIMER: TimerState = { phase: "idle", startedAt: null, targetSeconds: 0, taskLabel: "" };
 
@@ -97,9 +96,6 @@ export function reducer(state: TimerState, action: Action): TimerState {
     case "SKIP_REST":
     case "STOP_REST":
       if (state.phase !== "rest") return state;
-      return { ...EMPTY_TIMER };
-
-    case "RESET":
       return { ...EMPTY_TIMER };
 
     default:

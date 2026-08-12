@@ -24,11 +24,11 @@ export function Timer({
   // display at 00:00 (the user is free to keep resting; the phase stays 'rest'
   // until they tap). Auto-flow, by contrast, is DESIGNED to go negative (count-up).
   const restOver = phase === "rest" && remaining < 0;
-  const display = isAuto
-    ? `+${formatClock(Math.abs(remaining))}`
-    : restOver
-      ? "00:00"
-      : formatClock(remaining);
+  // No nested ternary (review rule) — explicit branches.
+  let display: string;
+  if (isAuto) display = `+${formatClock(Math.abs(remaining))}`;
+  else if (restOver) display = "00:00";
+  else display = formatClock(remaining);
   const accent = phase === "rest" ? "var(--color-rest)" : "var(--color-accent)";
 
   return (

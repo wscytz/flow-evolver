@@ -1,0 +1,68 @@
+# Build Flow Evolver on every push, and cut a GitHub Release on version tags.
+#
+#  - push to main        → build Windows + macOS bundles, keep them as artifacts
+#  - tag vX.Y.Z          → build + create a DRAFT GitHub Release with the bundles
+#  - manual dispatch     → same as a push build, on demand
+#
+# Windows needs no extra system deps (WebView2 ships with Win10/11); NSIS/MSI
+# packaging is handled by tauri-action. macOS builds natively on the arm64
+# runners (matches the Apple Silicon dev machine); no signing cert is set up,
+# so the .app/.dmg are unsigned (Gatekeeper will warn, not block).
+
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build bundles and publish
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # On a tag push the ref_name is e.g. v0.1.0; on main / manual it's
+          # empty so tauri-action only builds and uploads artifacts (no release).
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+          releaseName: ${{ github.ref_type == 'tag' && format('Flow Evolver {0}', github.ref_name) || '' }}
+          releaseBody: "桌面安装包,见下方 Assets。macOS 包未签名,首次打开需右键→打开。"
+          releaseDraft: true
+          prerelease: false
+
+      - name: Upload bundles as workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: flow-evolver-${{ matrix.platform }}
+          path: |
+            src-tauri/target/release/bundle/*
+          if-no-files-found: warn

@@ -392,10 +392,13 @@ function IconBtn({
       aria-pressed={active}
       className="flex h-7 w-7 items-center justify-center text-sm transition-transform active:translate-y-0.5"
       style={{
-        // Active state is carried by the glyph shape (◉ vs ○) + aria-pressed,
-        // not the color — accent on bg only reaches 3.4:1, failing AA at this
-        // 14px size. Ink (14:1) keeps the glyph readable.
-        color: "var(--color-ink)",
+        // Active state: ink background block + inverted glyph (◉ on ink). This is
+        // a shape/block signal, not a color-only one — sighted users see 置顶 on
+        // at a glance, and WCAG 1.4.11 needs only 3:1 for component state (the
+        // old accent tint at 3.4:1 was already compliant; the regression swapped
+        // a clear signal for a barely-different glyph shade).
+        color: active ? "var(--color-bg)" : "var(--color-ink)",
+        background: active ? "var(--color-ink)" : "transparent",
       }}
     >
       {children}

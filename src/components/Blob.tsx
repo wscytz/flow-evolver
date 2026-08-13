@@ -88,7 +88,14 @@ function HeroBlob({ fatigue, fill }: { fatigue: number; fill: string }) {
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      setT(Math.min(1, (performance.now() - stepAtRef.current) / (dur * 1000)));
+      // Skip re-rendering while the window is hidden — a focus timer spends most
+      // of a session in the background, and re-tessellating a full-screen SVG the
+      // user can't see is pure waste. rAF stays armed, so on the next visible
+      // frame we resume exactly where we left off (t continues from its last
+      // value; the 1s step interval below is the watchdog that keeps timing sane).
+      if (document.visibilityState === "visible") {
+        setT(Math.min(1, (performance.now() - stepAtRef.current) / (dur * 1000)));
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);

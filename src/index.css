@@ -48,6 +48,18 @@ button {
   font-family: inherit;
 }
 
+/* Visible focus for keyboard users (WCAG 2.4.7). Tailwind v4's preflight does
+   not itself clear outline, but this project never authored any :focus style,
+   and the task input explicitly set focus:outline-none — so a keyboard user
+   Tabbing through the app had no visible focus indicator at all. Use ink (not
+   accent) for the ring: accent only reaches 3.4:1 on bg (fails AA at this size),
+   whereas ink clears 14:1, and the hard ink outline matches the brutalist idiom.
+   :focus-visible (not :focus) keeps mouse clicks ring-free. */
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
 /* Mono tabular numerals so the big countdown doesn't twitch as digits change. */
 .tabular {
   font-variant-numeric: tabular-nums;

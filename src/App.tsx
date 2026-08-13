@@ -310,7 +310,7 @@ export default function App() {
                   }}
                   placeholder="正在忙什么？(可选)"
                   aria-label="任务描述"
-                  className="w-full border-b-2 bg-transparent py-3 text-xl font-bold placeholder:font-normal placeholder:text-[var(--color-ink-soft)] focus:outline-none"
+                  className="w-full border-b-2 bg-transparent py-3 text-xl font-bold placeholder:font-normal placeholder:text-[var(--color-ink-soft)]"
                   style={{ borderColor: "var(--color-ink)" }}
                 />
                 <div className="flex flex-1 flex-col items-center justify-center">
@@ -389,9 +389,13 @@ function IconBtn({
     <button
       onClick={onClick}
       aria-label={label}
+      aria-pressed={active}
       className="flex h-7 w-7 items-center justify-center text-sm transition-transform active:translate-y-0.5"
       style={{
-        color: active ? "var(--color-accent)" : "var(--color-ink)",
+        // Active state is carried by the glyph shape (◉ vs ○) + aria-pressed,
+        // not the color — accent on bg only reaches 3.4:1, failing AA at this
+        // 14px size. Ink (14:1) keeps the glyph readable.
+        color: "var(--color-ink)",
       }}
     >
       {children}

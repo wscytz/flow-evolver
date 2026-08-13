@@ -54,7 +54,7 @@ export function Timer({
       </motion.div>
       <div
         className="mt-2 text-xs font-bold uppercase tracking-[0.25em]"
-        style={{ color: accent }}
+        style={{ color: "var(--color-ink-soft)" }}
       >
         {phase === "focus" && "专注中"}
         {phase === "autoflow" && "自动流 · 点击结束"}

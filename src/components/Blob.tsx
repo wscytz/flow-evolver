@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { BLOB_PATHS, lerpPath, morphDuration, blobColor } from "../blob";
 
 /**
@@ -49,7 +49,12 @@ export function Blob({
 }
 
 function HeroBlob({ fatigue, fill }: { fatigue: number; fill: string }) {
-  const dur = morphDuration(fatigue); // seconds per full morph step
+  const reduce = useReducedMotion();
+  // Slow the morph 4× when the user has "reduce motion" on — we don't freeze it
+  // (the living shape is core to the product), but a slower cycle is far less
+  // stimulating for vestibular-sensitive users. Continuous rAF morph is not
+  // covered by <MotionConfig reducedMotion="user">, so we gate it here.
+  const dur = morphDuration(fatigue) * (reduce ? 4 : 1); // seconds per full morph step
   const [i, setI] = useState(0);
   // t ∈ [0,1] — progress within the current from→to step, advanced every rAF
   // frame. Kept in React state so the interpolated `d` is fully controlled.

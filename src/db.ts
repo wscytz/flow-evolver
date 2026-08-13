@@ -15,7 +15,14 @@ let dbPromise: Promise<Database> | null = null;
 
 function db(): Promise<Database> {
   if (!dbPromise) {
-    dbPromise = Database.load("sqlite:flow-evolver.db");
+    // If the first load rejects (disk full / permissions / a bad migration),
+    // DON'T cache the rejected promise — every later db() call would return the
+    // same rejection and silently fail every persist for the whole session. Reset
+    // on failure so the next attempt can retry.
+    dbPromise = Database.load("sqlite:flow-evolver.db").catch((e) => {
+      dbPromise = null;
+      throw e;
+    });
   }
   return dbPromise;
 }

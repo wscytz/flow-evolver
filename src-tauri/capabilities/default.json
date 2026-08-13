@@ -8,7 +8,6 @@
     "core:window:allow-set-always-on-top",
     "core:window:allow-set-size",
     "core:window:allow-center",
-    "opener:default",
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",

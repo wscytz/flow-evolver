@@ -90,9 +90,11 @@ function HeroBlob({ fatigue, fill }: { fatigue: number; fill: string }) {
     const tick = () => {
       // Skip re-rendering while the window is hidden — a focus timer spends most
       // of a session in the background, and re-tessellating a full-screen SVG the
-      // user can't see is pure waste. rAF stays armed, so on the next visible
-      // frame we resume exactly where we left off (t continues from its last
-      // value; the 1s step interval below is the watchdog that keeps timing sane).
+      // user can't see is pure waste. rAF stays armed so the loop survives; on the
+      // next visible frame we recompute t from stepAtRef. Note the 1s step interval
+      // below keeps stepping while hidden (it resets t to 0 per step), so on return
+      // the shape replays from the current step's start — invisible, since nothing
+      // rendered while hidden.
       if (document.visibilityState === "visible") {
         setT(Math.min(1, (performance.now() - stepAtRef.current) / (dur * 1000)));
       }

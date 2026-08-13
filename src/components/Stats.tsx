@@ -36,7 +36,10 @@ function Cell({
       >
         {label}
       </div>
-      <div className="tabular mt-1 text-xl font-extrabold">{value}</div>
+      {/* nowrap: at the 320px min-width a 3-digit value + "分钟" (≈88px) is wider
+          than the cell content column (≈82px) — without nowrap it wraps into a
+          broken "120 / 分钟" two-line cell. nowrap lets it stay one line. */}
+      <div className="tabular mt-1 whitespace-nowrap text-xl font-extrabold">{value}</div>
     </div>
   );
 }

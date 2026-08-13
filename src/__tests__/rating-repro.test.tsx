@@ -123,6 +123,29 @@ describe("rating interaction (repro '0m focused freeze')", () => {
     }, { timeout: 3000 });
     expect(screen.queryByLabelText(/开始专注/i) || screen.queryByText(/跳过休息/i)).toBeTruthy();
   });
+
+  it("a sub-MIN_SESSION_SECONDS focus (accidental tap) is not persisted or rated", async () => {
+    // Misclick start → stop within the same second: the session must NOT be
+    // logged (a 0s row would inflate todaySessions and keep the streak alive
+    // with zero real focus) and must NOT move the persisted next target.
+    const user = userEvent.setup();
+    render(<App />);
+    await screen.findByText(/下次专注/i);
+
+    await user.click(screen.getByLabelText(/开始专注/i));
+    await waitFor(() => expect(screen.getByText(/提前结束/i)).toBeInTheDocument());
+    await user.click(screen.getByRole("button", { name: /提前结束/i }));
+    await waitFor(() => expect(screen.getByText(/这一轮怎么样/i)).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: /心流/i }));
+    await waitFor(() => {
+      expect(screen.queryByText(/这一轮怎么样/i)).not.toBeInTheDocument();
+    }, { timeout: 3000 });
+
+    // No session row persisted, target untouched.
+    expect(sessions.length).toBe(0);
+    expect(store.get("focus_target_seconds")).toBe("3");
+  });
 });
 
 describe("Rating shownSeconds freshness", () => {

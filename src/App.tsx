@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import { EMPTY_TIMER, reducer } from "./timer/reducer";
 import type { FocusConfig, RatingKey, SessionRecord } from "./timer/reducer";
-import { elapsedBetween, elapsedSeconds, fatigue } from "./timer/engine";
+import { elapsedBetween, elapsedSeconds, fatigue, MIN_SESSION_SECONDS } from "./timer/engine";
 import { nextFocusTarget, restSecondsFor, RATING_DEFS } from "./timer/heuristic";
 import {
   getStats,
@@ -89,7 +89,13 @@ export default function App() {
   const stopFocus = useCallback(() => {
     // snapshot the focus interval that just ended, to use when rating is chosen
     const s = stateRef.current;
-    if (!s.startedAt) return;
+    // Guard on phase (not just startedAt): the reducer's STOP_FOCUS guard is
+    // phase-based (focus|autoflow), and this App-layer guard must match it —
+    // otherwise a future UI that made the stop button clickable during rest
+    // would snapshot a rest session as a fake focus record, then have the
+    // dispatch silently no-op. rest also has startedAt set, so `!s.startedAt`
+    // alone doesn't protect that path.
+    if (!s.startedAt || (s.phase !== "focus" && s.phase !== "autoflow")) return;
     const end = Date.now();
     const actual = elapsedBetween(s.startedAt, end);
     lastFocusRef.current = {
@@ -128,6 +134,17 @@ export default function App() {
       const deltaMin = RATING_DEFS[r].deltaMinutes;
       const nextTarget = nextFocusTarget(cfg.focusTarget, r, cfg);
       const restSec = restSecondsFor(focus.actualSeconds, cfg);
+
+      // Accidental tap (start → stop within a few seconds): no real focus
+      // happened, so don't persist it or move the next target — just close the
+      // rating and go idle. Otherwise a 0-second session would inflate
+      // todaySessions, keep the streak alive for a day with zero focus, and
+      // apply a full rating delta to the persisted target. See MIN_SESSION_SECONDS.
+      if (focus.actualSeconds < MIN_SESSION_SECONDS) {
+        lastFocusRef.current = null;
+        dispatch({ type: "SKIP_RATING", now: Date.now() });
+        return;
+      }
 
       const focusRecord: SessionRecord = {
         ...focus,
@@ -175,6 +192,10 @@ export default function App() {
     lastFocusRef.current = null;
     dispatch({ type: "SKIP_RATING", now: Date.now() });
     if (!focus) return;
+    // Same accidental-tap floor as rate(): a sub-MIN_SESSION_SECONDS focus is a
+    // misclick, not a session — don't log it (a 0s row would inflate
+    // todaySessions and keep the streak alive with zero real focus).
+    if (focus.actualSeconds < MIN_SESSION_SECONDS) return;
     // "skip & end" still counts the focus session (ratingKey null) — otherwise
     // an unrated long flow would silently vanish from today's stats/streak.
     (async () => {

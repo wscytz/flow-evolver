@@ -33,6 +33,16 @@ export const EMPTY_TIMER: TimerState = {
 };
 
 /**
+ * A focus session shorter than this (seconds) is treated as an accidental tap,
+ * not real work: it must not count toward today's stats or the streak, and must
+ * not move the next focus target. Without this floor, a misclicked start→stop
+ * (<1s, e.g. same-second) would log a 0-second "focus" row that inflates
+ * todaySessions, keeps the streak alive for a day with zero real focus, and a
+ * rating on it would apply a full delta to the persisted target.
+ */
+export const MIN_SESSION_SECONDS = 10;
+
+/**
  * Elapsed seconds since the interval started, given a "now" timestamp.
  * Returns 0 when not running. Capped nowhere — auto-flow is meant to run past.
  */

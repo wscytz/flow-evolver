@@ -7,12 +7,17 @@ import { elapsedBetween, elapsedSeconds, fatigue, MIN_SESSION_SECONDS } from "./
 import { nextFocusTarget, restSecondsFor, RATING_DEFS } from "./timer/heuristic";
 import {
   getStats,
+  getRecentSessions,
   insertSession,
   loadConfig,
+  saveConfigSettings,
   saveFocusTarget,
   type FocusStats,
 } from "./db";
 import { toggleAlwaysOnTop } from "./window";
+import { SettingsSheet } from "./components/SettingsSheet";
+import { HistorySheet } from "./components/HistorySheet";
+import type { SettingsInput } from "./settings";
 
 import { Blob } from "./components/Blob";
 import { Timer } from "./components/Timer";
@@ -27,6 +32,9 @@ export default function App() {
   const [stats, setStats] = useState<FocusStats | null>(null);
   const [onTop, setOnTop] = useState(false);
   const [ready, setReady] = useState(false);
+  // Sheet visibility: only from idle — a settings/history overlay sliding up
+  // mid-session would cover the timer the user is actively running.
+  const [sheet, setSheet] = useState<"none" | "settings" | "history">("none");
 
   // Bookkeeping refs so effect hooks can read the latest values without
   // re-subscribing on every tick.
@@ -34,6 +42,17 @@ export default function App() {
   stateRef.current = state;
   const configRef = useRef(config);
   configRef.current = config;
+
+  // Shared fire-and-forget persist wrapper (rate/skipRating/endRest all had
+  // the identical try/catch-and-warn shape). Stats refresh on success only.
+  const persist = useCallback(async (op: () => Promise<unknown>, what: string) => {
+    try {
+      await op();
+      setStats(await getStats(Date.now()));
+    } catch (e) {
+      console.warn(`保存失败(${what}):`, e);
+    }
+  }, []);
 
   // ---- boot: load config + stats ----
   useEffect(() => {
@@ -84,6 +103,7 @@ export default function App() {
       taskLabel: label,
     });
     setNow(t);
+    setSheet("none");
   }, [taskInput]);
 
   const stopFocus = useCallback(() => {
@@ -156,15 +176,10 @@ export default function App() {
       // fast rate → skip rest → start can't run the next session at the stale
       // target (configRef updates on render; the DB write is fire-and-forget).
       setConfig({ ...cfg, focusTarget: nextTarget });
-      (async () => {
-        try {
-          await insertSession(focusRecord);
-          await saveFocusTarget(nextTarget);
-          setStats(await getStats(Date.now()));
-        } catch (e) {
-          console.warn("保存失败:", e);
-        }
-      })();
+      void persist(async () => {
+        await insertSession(focusRecord);
+        await saveFocusTarget(nextTarget);
+      }, "评分");
 
       if (restSec >= 60) {
         dispatch({
@@ -198,14 +213,10 @@ export default function App() {
     if (focus.actualSeconds < MIN_SESSION_SECONDS) return;
     // "skip & end" still counts the focus session (ratingKey null) — otherwise
     // an unrated long flow would silently vanish from today's stats/streak.
-    (async () => {
-      try {
-        await insertSession({ ...focus, ratingKey: null, ratingDelta: null });
-        setStats(await getStats(Date.now()));
-      } catch (e) {
-        console.warn("保存失败(跳过评分):", e);
-      }
-    })();
+    void persist(
+      () => insertSession({ ...focus, ratingKey: null, ratingDelta: null }),
+      "跳过评分",
+    );
   }, []);
 
   const endRestBusy = useRef(false);
@@ -220,34 +231,77 @@ export default function App() {
     endRestBusy.current = true;
     dispatch({ type: "STOP_REST" });
     try {
-      if (s.startedAt) {
+      const restStart = s.startedAt;
+      if (restStart !== null) {
         const end = Date.now();
-        const actual = elapsedBetween(s.startedAt, end);
-        await insertSession({
-          kind: "rest",
-          taskLabel: s.taskLabel,
-          targetSeconds: s.targetSeconds,
-          actualSeconds: actual,
-          autoFlowed: false,
-          ratingKey: null,
-          ratingDelta: null,
-          startedAt: s.startedAt,
-          endedAt: end,
-        });
-        setStats(await getStats(end));
+        const actual = elapsedBetween(restStart, end);
+        await persist(
+          () =>
+            insertSession({
+              kind: "rest",
+              taskLabel: s.taskLabel,
+              targetSeconds: s.targetSeconds,
+              actualSeconds: actual,
+              autoFlowed: false,
+              ratingKey: null,
+              ratingDelta: null,
+              startedAt: restStart,
+              endedAt: end,
+            }),
+          "休息",
+        );
       }
-    } catch (e) {
-      console.warn("保存失败(休息):", e);
     } finally {
       endRestBusy.current = false;
     }
-  }, []);
+  }, [persist]);
 
   const toggleOnTop = useCallback(() => {
     const next = !onTop;
     setOnTop(next);
     void toggleAlwaysOnTop(next);
   }, [onTop]);
+
+  // Settings save: persist to DB, then apply in memory. parseSettings already
+  // normalized the values, so what lands in config is exactly what loadConfig
+  // would read back next launch (minutes → seconds conversion lives in the DB
+  // layer). Returns success so the sheet knows whether to close.
+  const saveSettings = useCallback(
+    async (input: SettingsInput): Promise<boolean> => {
+      try {
+        await saveConfigSettings({
+          focusTargetMin: input.focusTarget,
+          focusMinMin: input.focusMin,
+          focusMaxMin: input.focusMax,
+          restMinutes: input.restMinutes,
+          perFocusMinutes: input.perFocusMinutes,
+        });
+      } catch (e) {
+        console.warn("保存设置失败:", e);
+        return false;
+      }
+      setConfig((cfg) => {
+        if (!cfg) return cfg;
+        return {
+          focusTarget: input.focusTarget * 60,
+          focusMin: input.focusMin * 60,
+          focusMax: input.focusMax * 60,
+          restRatio: input.perFocusMinutes > 0 ? input.restMinutes / input.perFocusMinutes : 0,
+        };
+      });
+      return true;
+    },
+    [],
+  );
+
+  // Sheets are idle-only; leaving idle (startFocus) closes any open one so it
+  // can't linger over the running screen.
+  const openSheet = useCallback((s: "settings" | "history") => {
+    if (stateRef.current.phase !== "idle") return;
+    setSheet(s);
+  }, []);
+
+  const loadHistory = useCallback(() => getRecentSessions(30), []);
 
   if (!ready || !config) {
     return (
@@ -294,7 +348,22 @@ export default function App() {
           Flow Evolver
         </span>
         <div className="flex gap-1">
-          <IconBtn label="置顶" active={onTop} onClick={toggleOnTop}>
+          {isIdle && (
+            <>
+              <IconBtn label="历史" onClick={() => openSheet("history")}>
+                ☰
+              </IconBtn>
+              <IconBtn label="设置" onClick={() => openSheet("settings")}>
+                ⚙
+              </IconBtn>
+            </>
+          )}
+          <IconBtn
+            label="置顶"
+            active={onTop}
+            onClick={toggleOnTop}
+            title={onTop ? "取消置顶" : "窗口置顶"}
+          >
             {onTop ? "◉" : "○"}
           </IconBtn>
         </div>
@@ -384,6 +453,19 @@ export default function App() {
       {/* ---- stats strip (idle only) ---- */}
       {isIdle && <Stats stats={stats} />}
 
+      {/* ---- settings & history overlays (idle only) ---- */}
+      <SettingsSheet
+        show={sheet === "settings" && isIdle}
+        config={config}
+        onClose={() => setSheet("none")}
+        onSave={saveSettings}
+      />
+      <HistorySheet
+        show={sheet === "history" && isIdle}
+        onClose={() => setSheet("none")}
+        load={loadHistory}
+      />
+
       {/* ---- rating overlay ---- */}
       <Rating
         show={state.phase === "rating"}
@@ -400,17 +482,20 @@ function IconBtn({
   onClick,
   active,
   label,
+  title,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   active?: boolean;
   label: string;
+  title?: string;
 }) {
   return (
     <button
       onClick={onClick}
       aria-label={label}
       aria-pressed={active}
+      title={title}
       className="flex h-7 w-7 items-center justify-center text-sm transition-transform active:translate-y-0.5"
       style={{
         // Active state: ink background block + inverted glyph (◉ on ink). This is

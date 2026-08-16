@@ -67,15 +67,73 @@ export async function loadConfig(): Promise<FocusConfig> {
 
 /** Persist the heuristic's newly-computed next focus target. */
 export async function saveFocusTarget(seconds: number): Promise<void> {
+  await saveSetting("focus_target_seconds", String(seconds));
+}
+
+/**
+ * Persist all heuristic tunables from the settings panel at once. Same UPSERT
+ * contract as saveFocusTarget: a missing row must be created, not silently
+ * skipped by a 0-row UPDATE. The panel only ever sees values that came out of
+ * parseSettings, so seconds-conversion here is trusted input.
+ */
+export async function saveConfigSettings(cfg: {
+  focusTargetMin: number;
+  focusMinMin: number;
+  focusMaxMin: number;
+  restMinutes: number;
+  perFocusMinutes: number;
+}): Promise<void> {
   const conn = await db();
-  // UPSERT, not a bare UPDATE: if the row is ever missing (drift, manual edit),
-  // an UPDATE would affect 0 rows and silently diverge from the in-memory value
-  // until restart. INSERT ... ON CONFLICT guarantees the write lands either way.
+  // One transaction: a settings row half-written (app killed mid-save) would
+  // leave min/max/ratio disagreeing with each other — loadConfig's repair
+  // bands can fix min>max but can't guess the user's intended ratio.
+  const rows: Array<[string, string]> = [
+    ["focus_target_seconds", String(Math.round(cfg.focusTargetMin * 60))],
+    ["focus_target_min", String(Math.round(cfg.focusMinMin * 60))],
+    ["focus_target_max", String(Math.round(cfg.focusMaxMin * 60))],
+    ["rest_ratio_numerator", String(Math.round(cfg.restMinutes))],
+    ["rest_ratio_denominator", String(Math.round(cfg.perFocusMinutes))],
+  ];
+  await conn.execute("BEGIN");
+  try {
+    for (const [key, value] of rows) {
+      await conn.execute(
+        `INSERT INTO settings(key, value) VALUES ($1, $2)
+         ON CONFLICT(key) DO UPDATE SET value = $2`,
+        [key, value],
+      );
+    }
+    await conn.execute("COMMIT");
+  } catch (e) {
+    await conn.execute("ROLLBACK");
+    throw e;
+  }
+}
+
+// UPSERT, not a bare UPDATE: if the row is ever missing (drift, manual edit),
+// an UPDATE would affect 0 rows and silently diverge from the in-memory value
+// until restart. INSERT ... ON CONFLICT guarantees the write lands either way.
+async function saveSetting(key: string, value: string): Promise<void> {
+  const conn = await db();
   await conn.execute(
-    `INSERT INTO settings(key, value) VALUES ('focus_target_seconds', $1)
-     ON CONFLICT(key) DO UPDATE SET value = $1`,
-    [String(seconds)],
+    `INSERT INTO settings(key, value) VALUES ($1, $2)
+     ON CONFLICT(key) DO UPDATE SET value = $2`,
+    [key, value],
   );
+}
+
+/** Recent focus/rest intervals for the history panel, newest first. */
+export async function getRecentSessions(
+  limit = 30,
+): Promise<SessionRow[]> {
+  const conn = await db();
+  const rows = (await conn.select<SessionRow[]>(
+    `SELECT id, kind, task_label, target_seconds, actual_seconds, auto_flowed,
+            rating_key, rating_delta, started_at, ended_at
+     FROM sessions ORDER BY id DESC LIMIT $1`,
+    [limit],
+  )) ?? [];
+  return rows;
 }
 
 export async function insertSession(rec: SessionRecord): Promise<void> {

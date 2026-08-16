@@ -30,10 +30,19 @@ export function Timer({
   else if (restOver) display = "00:00";
   else display = formatClock(remaining);
   const accent = phase === "rest" ? "var(--color-rest)" : "var(--color-accent)";
+  // The whole clock is one big tap target; screen readers need to announce what
+  // tapping it DOES, not just read the digits.
+  const aria =
+    phase === "rest"
+      ? "剩余休息时间,点击结束休息"
+      : isAuto
+        ? "已超时继续专注,点击结束并评分"
+        : "剩余专注时间,点击提前结束";
 
   return (
     <button
       onClick={onPrimary}
+      aria-label={aria}
       className="flex w-full flex-col items-center justify-center bg-transparent p-0"
       style={{ cursor: "pointer" }}
     >

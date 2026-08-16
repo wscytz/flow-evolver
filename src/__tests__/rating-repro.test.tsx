@@ -67,7 +67,7 @@ describe("rating interaction (repro '0m focused freeze')", () => {
     await user.click(screen.getByLabelText(/开始专注/i));
     // immediately end early (0s of focus)
     await waitFor(() => expect(screen.getByText(/提前结束/i)).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: /提前结束/i }));
+    await user.click(screen.getByRole("button", { name: "提前结束" }));
 
     // rating sheet appears
     await waitFor(() => expect(screen.getByText(/这一轮怎么样/i)).toBeInTheDocument());
@@ -109,7 +109,7 @@ describe("rating interaction (repro '0m focused freeze')", () => {
     await screen.findByText(/下次专注/i);
     await user.click(screen.getByLabelText(/开始专注/i));
     await waitFor(() => expect(screen.getByText(/提前结束/i)).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: /提前结束/i }));
+    await user.click(screen.getByRole("button", { name: "提前结束" }));
     await waitFor(() => expect(screen.getByText(/这一轮怎么样/i)).toBeInTheDocument());
 
     // two rapid clicks on Flow
@@ -134,7 +134,7 @@ describe("rating interaction (repro '0m focused freeze')", () => {
 
     await user.click(screen.getByLabelText(/开始专注/i));
     await waitFor(() => expect(screen.getByText(/提前结束/i)).toBeInTheDocument());
-    await user.click(screen.getByRole("button", { name: /提前结束/i }));
+    await user.click(screen.getByRole("button", { name: "提前结束" }));
     await waitFor(() => expect(screen.getByText(/这一轮怎么样/i)).toBeInTheDocument());
 
     await user.click(screen.getByRole("button", { name: /心流/i }));

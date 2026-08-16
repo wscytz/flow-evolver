@@ -27,6 +27,11 @@ Built as a Tauri v2 desktop app — macOS (Apple Silicon + Intel) and Windows.
 - **Four-bucket self-rating (中文界面).** When you stop, pick 心流 (+10m) /
   专注 (+5m) / 一般 (0) / 分心 (−5m), clamped to a sane 10–90 min window.
   The next session targets the new value.
+- **Settings.** Tune the target window (下限/上限) and the rest ratio in the
+  ⚙ sheet — validated, applied immediately, persisted in SQLite. No hidden
+  config files.
+- **History.** ☰ shows your recent sessions: what, how long, how you rated
+  them, and which ones auto-flowed past their target.
 - **Rest, derived.** After a focus session you get a rest proportional to how
   long you actually focused (default 5 min per 25 min). Skippable.
 - **Lightweight task tagging.** Optional one-line label for what you're working

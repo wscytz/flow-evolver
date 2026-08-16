@@ -353,7 +353,7 @@ export default function App() {
               <IconBtn
                 label="历史"
                 active={sheet === "history"}
-                aria-expanded={sheet === "history"}
+                ariaExpanded={sheet === "history"}
                 onClick={() => toggleSheet("history")}
               >
                 ☰
@@ -361,7 +361,7 @@ export default function App() {
               <IconBtn
                 label="设置"
                 active={sheet === "settings"}
-                aria-expanded={sheet === "settings"}
+                ariaExpanded={sheet === "settings"}
                 onClick={() => toggleSheet("settings")}
               >
                 ⚙

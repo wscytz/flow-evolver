@@ -75,6 +75,15 @@ export async function saveFocusTarget(seconds: number): Promise<void> {
  * contract as saveFocusTarget: a missing row must be created, not silently
  * skipped by a 0-row UPDATE. The panel only ever sees values that came out of
  * parseSettings, so seconds-conversion here is trusted input.
+ *
+ * One multi-row statement, NOT a BEGIN…COMMIT transaction: tauri-plugin-sql
+ * wraps a sqlx SqlitePool (default 10 connections) and each execute() acquires
+ * an arbitrary idle connection, so a string-level BEGIN could land on a
+ * different connection than its COMMIT — the connection that ran BEGIN stays
+ * in an open transaction holding the SQLite write lock forever, and every
+ * later write (session inserts, target updates) fails with "database is
+ * locked", silently swallowed by the persist wrapper. A single INSERT … VALUES
+ * (…),(…)… statement is atomic on its own and touches exactly one connection.
  */
 export async function saveConfigSettings(cfg: {
   focusTargetMin: number;
@@ -84,30 +93,22 @@ export async function saveConfigSettings(cfg: {
   perFocusMinutes: number;
 }): Promise<void> {
   const conn = await db();
-  // One transaction: a settings row half-written (app killed mid-save) would
-  // leave min/max/ratio disagreeing with each other — loadConfig's repair
-  // bands can fix min>max but can't guess the user's intended ratio.
-  const rows: Array<[string, string]> = [
-    ["focus_target_seconds", String(Math.round(cfg.focusTargetMin * 60))],
-    ["focus_target_min", String(Math.round(cfg.focusMinMin * 60))],
-    ["focus_target_max", String(Math.round(cfg.focusMaxMin * 60))],
-    ["rest_ratio_numerator", String(Math.round(cfg.restMinutes))],
-    ["rest_ratio_denominator", String(Math.round(cfg.perFocusMinutes))],
-  ];
-  await conn.execute("BEGIN");
-  try {
-    for (const [key, value] of rows) {
-      await conn.execute(
-        `INSERT INTO settings(key, value) VALUES ($1, $2)
-         ON CONFLICT(key) DO UPDATE SET value = $2`,
-        [key, value],
-      );
-    }
-    await conn.execute("COMMIT");
-  } catch (e) {
-    await conn.execute("ROLLBACK");
-    throw e;
-  }
+  await conn.execute(
+    `INSERT INTO settings(key, value) VALUES
+       ('focus_target_seconds', $1),
+       ('focus_target_min', $2),
+       ('focus_target_max', $3),
+       ('rest_ratio_numerator', $4),
+       ('rest_ratio_denominator', $5)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [
+      String(Math.round(cfg.focusTargetMin * 60)),
+      String(Math.round(cfg.focusMinMin * 60)),
+      String(Math.round(cfg.focusMaxMin * 60)),
+      String(Math.round(cfg.restMinutes)),
+      String(Math.round(cfg.perFocusMinutes)),
+    ],
+  );
 }
 
 // UPSERT, not a bare UPDATE: if the row is ever missing (drift, manual edit),

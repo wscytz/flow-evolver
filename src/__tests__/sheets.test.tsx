@@ -27,6 +27,8 @@ const sessions: Record<string, unknown>[] = [];
 let streakEndedAt: number[] = [];
 // Rows returned by the history query (getRecentSessions).
 let recentRows: Record<string, unknown>[] = [];
+// Every execute() call, for the no-transaction regression test.
+const execLog: { sql: string; binds: unknown[] }[] = [];
 
 vi.mock("@tauri-apps/plugin-sql", () => ({
   default: class FakeDB {
@@ -40,15 +42,62 @@ vi.mock("@tauri-apps/plugin-sql", () => ({
       return [] as unknown as T;
     }
     async execute(sql: string, binds: unknown[]) {
+      execLog.push({ sql: sql.replace(/\s+/g, " "), binds });
       const c = sql.replace(/\s+/g, " ");
       if (/INSERT INTO sessions/.test(c)) sessions.push({ kind: binds[0] });
-      if (/ON CONFLICT\(key\)/.test(c)) store.set(String(binds[0]), String(binds[1]));
+      if (/ON CONFLICT\(key\) DO UPDATE SET value = excluded\.value/.test(c)) {
+        // multi-row settings UPSERT: keys are inline, values are the binds
+        store.set("focus_target_seconds", String(binds[0]));
+        store.set("focus_target_min", String(binds[1]));
+        store.set("focus_target_max", String(binds[2]));
+        store.set("rest_ratio_numerator", String(binds[3]));
+        store.set("rest_ratio_denominator", String(binds[4]));
+      }
+      if (/ON CONFLICT\(key\) DO UPDATE SET value = \$2/.test(c)) store.set(String(binds[0]), String(binds[1]));
       if (/UPDATE settings/.test(c)) store.set("focus_target_seconds", String(binds[0]));
     }
   },
 }));
 
 import App from "../App";
+import { saveConfigSettings } from "../db";
+
+describe("saveConfigSettings: no string-level transactions (sqlx pool regression)", () => {
+  beforeEach(() => {
+    store.set("focus_target_seconds", "1500");
+    store.set("focus_target_min", "600");
+    store.set("focus_target_max", "5400");
+    store.set("rest_ratio_numerator", "5");
+    store.set("rest_ratio_denominator", "25");
+    execLog.length = 0;
+  });
+
+  it("writes all five keys in ONE statement and never emits BEGIN/COMMIT/ROLLBACK", async () => {
+    // tauri-plugin-sql pools connections; a BEGIN…COMMIT split across pool
+    // connections leaves one stuck in an open transaction holding the SQLite
+    // write lock — after which EVERY later write fails with "database is
+    // locked" and the persist wrapper swallows it. That was the "评分不生效、
+    // 次数不统计" bug. The fix: one multi-row UPSERT statement.
+    await saveConfigSettings({
+      focusTargetMin: 30,
+      focusMinMin: 15,
+      focusMaxMin: 90,
+      restMinutes: 6,
+      perFocusMinutes: 30,
+    });
+
+    const writes = execLog.filter((e) => /INSERT INTO settings/.test(e.sql));
+    expect(writes.length).toBe(1);
+    const txns = execLog.filter((e) => /\b(BEGIN|COMMIT|ROLLBACK)\b/i.test(e.sql));
+    expect(txns).toEqual([]);
+
+    expect(store.get("focus_target_seconds")).toBe("1800");
+    expect(store.get("focus_target_min")).toBe("900");
+    expect(store.get("focus_target_max")).toBe("5400");
+    expect(store.get("rest_ratio_numerator")).toBe("6");
+    expect(store.get("rest_ratio_denominator")).toBe("30");
+  });
+});
 
 describe("settings sheet", () => {
   beforeEach(() => {

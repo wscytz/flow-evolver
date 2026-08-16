@@ -35,6 +35,14 @@ export default function App() {
   // Sheet visibility: only from idle — a settings/history overlay sliding up
   // mid-session would cover the timer the user is actively running.
   const [sheet, setSheet] = useState<"none" | "settings" | "history">("none");
+  // Ephemeral notice (e.g. "本轮不足 10 秒,未计入统计"). Auto-clears.
+  const [notice, setNotice] = useState<string | null>(null);
+  const noticeTimer = useRef<number | null>(null);
+  const flashNotice = useCallback((msg: string) => {
+    setNotice(msg);
+    if (noticeTimer.current !== null) window.clearTimeout(noticeTimer.current);
+    noticeTimer.current = window.setTimeout(() => setNotice(null), 2600);
+  }, []);
 
   // Bookkeeping refs so effect hooks can read the latest values without
   // re-subscribing on every tick.
@@ -45,12 +53,28 @@ export default function App() {
 
   // Shared fire-and-forget persist wrapper (rate/skipRating/endRest all had
   // the identical try/catch-and-warn shape). Stats refresh on success only.
+  // console.warn is invisible in a packaged WKWebView, so failures ALSO append
+  // to ~/Library/Logs/flow-evolver-persist.log via the fs plugin-less path —
+  // actually simplest reliable sink without extra plugins: localStorage. The
+  // log is read on demand from the history sheet dev path; keep it small.
   const persist = useCallback(async (op: () => Promise<unknown>, what: string) => {
     try {
       await op();
       setStats(await getStats(Date.now()));
     } catch (e) {
       console.warn(`保存失败(${what}):`, e);
+      try {
+        const key = "persist-errors";
+        const prev = JSON.parse(localStorage.getItem(key) ?? "[]") as unknown[];
+        prev.push({
+          at: new Date().toISOString(),
+          what,
+          error: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+        });
+        localStorage.setItem(key, JSON.stringify(prev.slice(-50)));
+      } catch {
+        /* logging must never throw */
+      }
     }
   }, []);
 
@@ -162,6 +186,10 @@ export default function App() {
       // apply a full rating delta to the persisted target. See MIN_SESSION_SECONDS.
       if (focus.actualSeconds < MIN_SESSION_SECONDS) {
         lastFocusRef.current = null;
+        // The notice matters: silently snapping back to idle reads exactly
+        // like "the rating did nothing" — a user quickly testing the app
+        // would (and did) report it as a bug.
+        flashNotice(`本轮仅 ${focus.actualSeconds} 秒,不足 ${MIN_SESSION_SECONDS} 秒,未计入统计`);
         dispatch({ type: "SKIP_RATING", now: Date.now() });
         return;
       }
@@ -197,7 +225,7 @@ export default function App() {
       }
       lastFocusRef.current = null;
     },
-    [],
+    [flashNotice],
   );
 
   const skipRating = useCallback(() => {
@@ -210,14 +238,17 @@ export default function App() {
     // Same accidental-tap floor as rate(): a sub-MIN_SESSION_SECONDS focus is a
     // misclick, not a session — don't log it (a 0s row would inflate
     // todaySessions and keep the streak alive with zero real focus).
-    if (focus.actualSeconds < MIN_SESSION_SECONDS) return;
+    if (focus.actualSeconds < MIN_SESSION_SECONDS) {
+      flashNotice(`本轮仅 ${focus.actualSeconds} 秒,不足 ${MIN_SESSION_SECONDS} 秒,未计入统计`);
+      return;
+    }
     // "skip & end" still counts the focus session (ratingKey null) — otherwise
     // an unrated long flow would silently vanish from today's stats/streak.
     void persist(
       () => insertSession({ ...focus, ratingKey: null, ratingDelta: null }),
       "跳过评分",
     );
-  }, []);
+  }, [flashNotice, persist]);
 
   const endRestBusy = useRef(false);
   const endRest = useCallback(async () => {
@@ -462,6 +493,28 @@ export default function App() {
 
       {/* ---- stats strip (idle only) ---- */}
       {isIdle && <Stats stats={stats} />}
+
+      {/* ---- ephemeral notice (e.g. short-session filter) ---- */}
+      <AnimatePresence>
+        {notice && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="pointer-events-none absolute inset-x-0 z-30 flex justify-center px-6"
+            style={{ top: "3.25rem" }}
+            role="status"
+          >
+            <span
+              className="border-2 bg-[var(--color-bg)] px-3 py-1.5 text-center text-[11px] font-bold"
+              style={{ borderColor: "var(--color-ink)", color: "var(--color-ink)" }}
+            >
+              {notice}
+            </span>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ---- settings & history overlays (idle only) ---- */}
       <SettingsSheet

@@ -296,9 +296,9 @@ export default function App() {
 
   // Sheets are idle-only; leaving idle (startFocus) closes any open one so it
   // can't linger over the running screen.
-  const openSheet = useCallback((s: "settings" | "history") => {
+  const toggleSheet = useCallback((s: "settings" | "history") => {
     if (stateRef.current.phase !== "idle") return;
-    setSheet(s);
+    setSheet((cur) => (cur === s ? "none" : s));
   }, []);
 
   const loadHistory = useCallback(() => getRecentSessions(30), []);
@@ -350,10 +350,20 @@ export default function App() {
         <div className="flex gap-1">
           {isIdle && (
             <>
-              <IconBtn label="历史" onClick={() => openSheet("history")}>
+              <IconBtn
+                label="历史"
+                active={sheet === "history"}
+                aria-expanded={sheet === "history"}
+                onClick={() => toggleSheet("history")}
+              >
                 ☰
               </IconBtn>
-              <IconBtn label="设置" onClick={() => openSheet("settings")}>
+              <IconBtn
+                label="设置"
+                active={sheet === "settings"}
+                aria-expanded={sheet === "settings"}
+                onClick={() => toggleSheet("settings")}
+              >
                 ⚙
               </IconBtn>
             </>
@@ -483,31 +493,49 @@ function IconBtn({
   active,
   label,
   title,
+  ariaExpanded,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   active?: boolean;
   label: string;
   title?: string;
+  ariaExpanded?: boolean;
 }) {
+  // Two active-state styles, both shape-or-color-plus-position (never color
+  // alone, WCAG 1.4.1):
+  //  - variant "ring" (pin): the glyph itself flips ○→◉ — filled disc. The
+  //    user preferred the glyph change over the ink background block.
+  //  - variant "bar" (sheet toggles): accent-colored glyph + a small accent
+  //    underline, echoing the app's border-heavy brutalism.
+  // Both keep ≥3:1 contrast for state (1.4.11).
+  const variant = label === "置顶" ? "ring" : "bar";
   return (
     <button
       onClick={onClick}
       aria-label={label}
-      aria-pressed={active}
+      aria-pressed={variant === "ring" ? active : undefined}
+      aria-expanded={ariaExpanded}
       title={title}
-      className="flex h-7 w-7 items-center justify-center text-sm transition-transform active:translate-y-0.5"
+      className="flex h-7 w-7 flex-col items-center justify-center text-sm transition-transform active:translate-y-0.5"
       style={{
-        // Active state: ink background block + inverted glyph (◉ on ink). This is
-        // a shape/block signal, not a color-only one — sighted users see 置顶 on
-        // at a glance, and WCAG 1.4.11 needs only 3:1 for component state (the
-        // old accent tint at 3.4:1 was already compliant; the regression swapped
-        // a clear signal for a barely-different glyph shade).
-        color: active ? "var(--color-bg)" : "var(--color-ink)",
-        background: active ? "var(--color-ink)" : "transparent",
+        color: active
+          ? variant === "ring"
+            ? "var(--color-accent)"
+            : "var(--color-accent)"
+          : "var(--color-ink)",
       }}
     >
-      {children}
+      <span aria-hidden>{children}</span>
+      {variant === "bar" && (
+        <span
+          aria-hidden
+          className="mt-0.5 h-0.5 w-4"
+          style={{
+            background: active ? "var(--color-accent)" : "transparent",
+          }}
+        />
+      )}
     </button>
   );
 }

@@ -14,7 +14,7 @@
 
 - **自动流。** 倒计时归零 → 计时器静默切换为正计时。你继续工作。背景 blob 会随着你超时越久,从平静的棕色缓慢转向躁动的血橙色,让你*感受*到负荷,却不被打断。休息期间 blob 保持平静,直到休息目标耗尽才转为躁动——一个温和的"该回去工作了"提示,而不是又一个逼你的倒计时。
 - **四档自我评分(中文界面)。** 停下时选 心流 (+10 分钟)/ 专注 (+5 分钟) / 一般 (0) / 分心 (−5 分钟),clamp 到 10–90 分钟的合理区间。下一次会话就用新目标。
-- **设置。** 在 ⚙ 面板调整目标上下限与休息比例——校验后立即生效,存入 SQLite。没有隐藏配置文件。
+- **设置。** 在 ⚙ 面板调整下次专注目标、目标上下限与休息比例——校验后立即生效,存入 SQLite。没有隐藏配置文件。
 - **历史。** ☰ 查看最近的专注/休息记录:做了什么、多久、评了几分、哪些自动流超了目标。
 - **按比例休息。** 专注结束后,按你实际专注的时长派生出相应休息(默认每 25 分钟休息 5 分钟)。可跳过。
 - **轻量任务标签。** 可选一行标签,记录你在忙什么。不做项目、不做列表——只留上下文。
@@ -41,9 +41,9 @@
 ```
 
 1. **待机** — 显示下一目标(如 25 分钟)、任务输入框、开始按钮、底部统计条。
-2. **专注** — 倒计时,背景 blob 缓慢蠕动,窗口自动展开。
+2. **专注** — 倒计时,背景 blob 缓慢蠕动,窗口保持小窗不变。
 3. **自动流** — 到点**不响不弹**,静默转正向计时 `+00:01…`,blob 加速变橙。
-4. **评分** — 点"提前结束"后快照本轮实际秒数,弹出四档:心流/专注/一般/分心。
+4. **评分** — 点"提前结束"后快照本轮实际秒数,弹出四档:心流/专注/一般/分心;不足 10 秒的误触同样弹面板,但无论选哪档或跳过都不落库、不动目标,提示"本轮仅 N 秒,不足 10 秒,未计入统计"后回到待机。
 5. **休息** — 按实际专注时长按比例派生(默认 5 分钟/25 分钟);不足 1 分钟直接跳过。
 6. **回到待机** — 下一目标已被你的自评悄悄调整(±档位,clamp 10–90 分钟)。
 
@@ -97,7 +97,7 @@ npm run tauri build
 
 ```
 src-tauri/target/release/bundle/macos/flow-evolver.app
-src-tauri/target/release/bundle/dmg/flow-evolver_0.1.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/flow-evolver_1.0.0_aarch64.dmg
 ```
 
 ## 项目结构
@@ -111,12 +111,16 @@ src/
   blob.ts         # SVG 路径字典、lerpPath 插值、疲劳→morph 时长与颜色
   db.ts           # SQLite(tauri-plugin-sql)sessions + settings
   window.ts       # 小/展开窗口尺寸、置顶
+  settings.ts     # 设置面板的解析/校验(纯函数,无 React/DB)
   components/
     Blob.tsx      # 液态 morph 主形状 + 待机 seed
     Timer.tsx     # 大号倒计时 / 正计时
     Rating.tsx    # 四档评分面板
     Stats.tsx     # 今日 / 次数 / 连续 统计条
+    SettingsSheet.tsx # ⚙ 设置面板(下次目标/上下限/休息比例)
+    HistorySheet.tsx  # ☰ 最近会话面板
   App.tsx         # 编排:状态、tick、持久化、布局
+  ErrorBoundary.tsx # 兜底错误边界(中文提示,建议重启)
   index.css       # Tailwind v4 + OKLCH neo-brutalism 主题
 src-tauri/
   src/lib.rs              # 托管 SQL 插件 + 迁移
@@ -128,10 +132,12 @@ src-tauri/
 ## 测试
 
 - **`core.test.ts`**(15 个)——引擎数学、静默自动流翻转(证明 `startedAt` 保持不变、已用时间越过目标后继续增长)、reducer 转换 + 守卫(START_FOCUS、RATE、SKIP_RATING)、启发式 clamp、休息派生、四档增量。
-- **`App.test.tsx`**(7 个)——app 挂载、从 SQL mock 加载配置、点击开始展开窗口、getStats 连续天数时区(UTC+8 本地午夜用例)、loadConfig 损坏韧性(NaN 兜底、min/max 修复、越界目标 clamp 进 `[min, max]`)。
-- **`rating-repro.test.tsx`**(3 个)——复现"专注 0 分钟 不响应"卡死:开始 → 提前结束 → 评分面板 → 点心流 → app 恢复响应;双击评分按钮不会取消已开始的休息;评分面板"专注 X 分钟"标签不会把上一轮的时长泄漏进一个 0 秒的会话。含静态 z-index 契约检查(面板 z-20 > main z-10)——卡死的根因是真实鼠标点击命中了 main 的透明 div。
+- **`App.test.tsx`**(7 个)——app 挂载、从 SQL mock 加载配置、点击开始执行 START_FOCUS(进入专注界面)、getStats 连续天数时区(UTC+8 本地午夜用例)、loadConfig 损坏韧性(NaN 兜底、min/max 修复、越界目标 clamp 进 `[min, max]`)。
+- **`rating-repro.test.tsx`**(4 个)——复现"专注 0 分钟 不响应"卡死:开始 → 提前结束 → 评分面板 → 点心流 → app 恢复响应;双击评分按钮不会取消已开始的休息;评分面板"专注 X 分钟"标签不会把上一轮的时长泄漏进一个 0 秒的会话;不足 10 秒的误触不落库、不进评分。含静态 z-index 契约检查(面板 z-20 > main z-10)——卡死的根因是真实鼠标点击命中了 main 的透明 div。
 - **`Blob.test.tsx`**(4 个)——疲劳→时长映射的 morph 步进、疲劳逐 tick 漂移时 blob 仍持续 morph 的回归(旧 `setInterval(dur)` 在 deadline 前被重建导致冻结)、`lerpPath` 液态插值函数(t=0 → from,t=1 → to,骨架保留)。
 - **`window.test.ts`**(2 个)——展开模式把显示器物理工作区按缩放因子换算成逻辑单位(一个让 Retina 2x 下"展开"被 clamp 成全屏的 bug),以及小窗口保持固定尺寸。
+- **`settings.test.ts`**(7 个)——parseSettings 校验:合法输入原样通过、非数字垃圾被拒、`max <= min` 被拒(否则启发式 clamp 会卡死)、区间 clamp、目标收进新 `[min, max]`、取整、loadConfig 往返不变式。
+- **`sheets.test.tsx`**(6 个)——设置/历史面板:保存以单条语句写全部五个键且不产生 BEGIN/COMMIT(sqlx 字符串事务回归)、⚙ 面板从待机头打开并立即生效、`max <= min` 报错且面板保持打开、会话进行中隐藏面板按钮、历史按时间倒序带评分/自动流标记、无记录时的空态。
 
 用 `npm test` 运行。
 

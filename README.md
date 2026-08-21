@@ -27,9 +27,9 @@ Built as a Tauri v2 desktop app — macOS (Apple Silicon + Intel) and Windows.
 - **Four-bucket self-rating (中文界面).** When you stop, pick 心流 (+10m) /
   专注 (+5m) / 一般 (0) / 分心 (−5m), clamped to a sane 10–90 min window.
   The next session targets the new value.
-- **Settings.** Tune the target window (下限/上限) and the rest ratio in the
-  ⚙ sheet — validated, applied immediately, persisted in SQLite. No hidden
-  config files.
+- **Settings.** Tune the next target (下次专注目标), the target window
+  (下限/上限), and the rest ratio in the ⚙ sheet — validated, applied
+  immediately, persisted in SQLite. No hidden config files.
 - **History.** ☰ shows your recent sessions: what, how long, how you rated
   them, and which ones auto-flowed past their target.
 - **Rest, derived.** After a focus session you get a rest proportional to how
@@ -63,9 +63,9 @@ Built as a Tauri v2 desktop app — macOS (Apple Silicon + Intel) and Windows.
 ```
 
 1. **待机** — 显示下一目标(如 25 分钟)、任务输入框、开始按钮、底部统计条。
-2. **专注** — 倒计时,背景 blob 缓慢蠕动,窗口自动展开。
+2. **专注** — 倒计时,背景 blob 缓慢蠕动,窗口保持小窗不变。
 3. **自动流** — 到点**不响不弹**,静默转正向计时 `+00:01…`,blob 加速变橙。
-4. **评分** — 点"提前结束"后快照本轮实际秒数,弹出四档:心流/专注/一般/分心。
+4. **评分** — 点"提前结束"后快照本轮实际秒数,弹出四档:心流/专注/一般/分心;不足 10 秒的误触同样弹面板,但无论选哪档或跳过都不落库、不动目标,提示"本轮仅 N 秒,不足 10 秒,未计入统计"后回到待机。
 5. **休息** — 按实际专注时长按比例派生(默认 5 分钟/25 分钟);不足 1 分钟直接跳过。
 6. **回到待机** — 下一目标已被你的自评悄悄调整(±档位,clamp 10–90 分钟)。
 
@@ -129,7 +129,7 @@ Build output:
 
 ```
 src-tauri/target/release/bundle/macos/flow-evolver.app
-src-tauri/target/release/bundle/dmg/flow-evolver_0.1.0_aarch64.dmg
+src-tauri/target/release/bundle/dmg/flow-evolver_1.0.0_aarch64.dmg
 ```
 
 ## Project layout
@@ -143,12 +143,16 @@ src/
   blob.ts         # SVG path dictionary, lerpPath interpolation, morph duration & color from fatigue
   db.ts           # SQLite via tauri-plugin-sql (sessions + settings)
   window.ts       # small/expanded window sizing, always-on-top
+  settings.ts     # settings-panel parsing/validation (pure, no React/DB)
   components/
     Blob.tsx      # the morphing hero shape + idle seed
     Timer.tsx     # giant countdown / count-up
     Rating.tsx    # the four-bucket rating sheet
     Stats.tsx     # today / sessions / streak strip
+    SettingsSheet.tsx # the ⚙ panel (next target, bounds, rest ratio)
+    HistorySheet.tsx  # the ☰ recent-sessions panel
   App.tsx         # orchestration: state, ticking, persistence, layout
+  ErrorBoundary.tsx # last-resort render guard (Chinese fallback, suggests restart)
   index.css       # Tailwind v4 + OKLCH neo-brutalism theme
 src-tauri/
   src/lib.rs              # hosts the SQL plugin + migrations
@@ -164,14 +168,16 @@ src-tauri/
   transitions + guards (START_FOCUS, RATE, SKIP_RATING), heuristic clamping,
   rest derivation, the four-bucket deltas.
 - **`App.test.tsx`** (7 tests) — the app mounts, loads config from the SQL
-  mock, clicking start expands the window, getStats streak timezone (UTC+8
-  local-midnight cases), and loadConfig corruption resilience (NaN fallback,
-  min/max repair, stray target clamped into `[min, max]`).
-- **`rating-repro.test.tsx`** (3 tests) — the reported "0m focused 不响应"
-  freeze: start → end early → rating sheet → pick 心流 → app responds; plus
-  double-click on a rating bucket can't cancel a started rest, and the sheet's
+  mock, clicking start runs START_FOCUS (the focus screen appears), getStats
+  streak timezone (UTC+8 local-midnight cases), and loadConfig corruption
+  resilience (NaN fallback, min/max repair, stray target clamped into
+  `[min, max]`).
+- **`rating-repro.test.tsx`** (4 tests) — the reported "0m focused 不响应"
+  freeze: start → end early → rating sheet → pick 心流 → app responds;
+  double-click on a rating bucket can't cancel a started rest; the sheet's
   "专注 X 分钟" label never leaks the previous session's duration into a
-  0-second one. Includes a static z-index contract check (sheet z-20 > main
+  0-second one; and a sub-10-second accidental tap is neither persisted nor
+  rated. Includes a static z-index contract check (sheet z-20 > main
   z-10) — the root cause of the freeze was real mouse clicks hitting main's
   transparent div.
 - **`Blob.test.tsx`** (4 tests) — morph steps on the fatigue→duration mapping,
@@ -182,6 +188,16 @@ src-tauri/
 - **`window.test.ts`** (2 tests) — expanded-mode sizing converts the monitor's
   physical work-area into logical units via the scale factor (a Retina 2x bug
   that made "expanded" clamp to fullscreen), and small keeps the fixed size.
+- **`settings.test.ts`** (7 tests) — parseSettings validation: sane input
+  passes through, non-finite garbage rejected, `max <= min` rejected (would
+  freeze the heuristic clamp), band clamping, target clamped into the new
+  `[min, max]`, rounding, and a loadConfig round-trip invariant.
+- **`sheets.test.tsx`** (6 tests) — the settings/history sheets: save writes
+  all five keys in one statement with no BEGIN/COMMIT (the sqlx
+  string-transaction regression), the ⚙ sheet opens from the idle header and
+  applies immediately, `max <= min` keeps the sheet open with an error, the
+  sheet buttons hide while a session runs, history lists sessions newest-first
+  with rating/autoflow marks, and an empty state when there are none.
 
 Run with `npm test`.
 
